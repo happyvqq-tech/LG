@@ -1,1 +1,81 @@
--- 於步驟 3 撰寫（CLAUDE.md 第 7 節）
+-- 家庭語言學習 PWA — Supabase Schema（CLAUDE.md 第 7 節）
+-- 在 Supabase SQL Editor 直接執行本檔，再執行 seed.sql
+
+-- ---------- profiles：家庭成員 ----------
+create table if not exists profiles (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  languages     text[] not null default '{英文}',          -- 英文 / 日文 / 台語
+  level         text not null default 'B1',                -- B1 / B2 / C1
+  scenario_pool text[] not null default '{日常}',          -- 校園/日常/旅遊/職場/新聞時事/科技
+  created_at    timestamptz not null default now()
+);
+
+-- ---------- tasks：每日任務 ----------
+create table if not exists tasks (
+  id           uuid primary key default gen_random_uuid(),
+  profile_id   uuid not null references profiles(id) on delete cascade,
+  language     text not null,                              -- 英文 / 日文
+  task_json    jsonb not null,
+  status       text not null default 'pending' check (status in ('pending', 'done')),
+  created_at   timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create index if not exists idx_tasks_profile_created on tasks (profile_id, created_at desc);
+
+-- ---------- errors：個人錯誤記憶庫 ----------
+create table if not exists errors (
+  id           uuid primary key default gen_random_uuid(),
+  profile_id   uuid not null references profiles(id) on delete cascade,
+  language     text not null,
+  original     text not null,
+  corrected    text not null,
+  error_type   text not null,
+  rule_note    text not null default '',
+  status       text not null default 'active' check (status in ('active', 'pending_verify', 'resolved')),
+  verify_count int  not null default 0,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_errors_profile_status on errors (profile_id, status);
+
+-- ---------- grammar_points：文法點 ----------
+create table if not exists grammar_points (
+  id          uuid primary key default gen_random_uuid(),
+  language    text not null,                               -- 英文 / 日文
+  name        text not null,
+  level       text not null,                               -- 英文 A2-C1；日文 N4-N2
+  description text not null default '',
+  in_rotation boolean not null default false
+);
+
+create index if not exists idx_grammar_points_lang_rotation on grammar_points (language, in_rotation);
+
+-- ---------- taiwanese_scripts：台語腳本 ----------
+create table if not exists taiwanese_scripts (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  lines      jsonb not null default '[]',                  -- [{hanji, tailo, mandarin}]
+  audio_urls jsonb not null default '{}',                  -- {line_index: url}
+  created_at timestamptz not null default now()
+);
+
+-- ---------- RLS：自用專案，anon 可讀寫全部（家庭內部使用，不做隔離） ----------
+alter table profiles          enable row level security;
+alter table tasks             enable row level security;
+alter table errors            enable row level security;
+alter table grammar_points    enable row level security;
+alter table taiwanese_scripts enable row level security;
+
+drop policy if exists "anon full access profiles"          on profiles;
+drop policy if exists "anon full access tasks"             on tasks;
+drop policy if exists "anon full access errors"            on errors;
+drop policy if exists "anon full access grammar_points"    on grammar_points;
+drop policy if exists "anon full access taiwanese_scripts" on taiwanese_scripts;
+
+create policy "anon full access profiles"          on profiles          for all to anon using (true) with check (true);
+create policy "anon full access tasks"             on tasks             for all to anon using (true) with check (true);
+create policy "anon full access errors"            on errors            for all to anon using (true) with check (true);
+create policy "anon full access grammar_points"    on grammar_points    for all to anon using (true) with check (true);
+create policy "anon full access taiwanese_scripts" on taiwanese_scripts for all to anon using (true) with check (true);
