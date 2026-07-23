@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import ErrorBank from '../components/ErrorBank'
 import { useProfile } from '../lib/profileContext'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import { taskGeneratorSystemPrompt, isTaskJson } from '../lib/prompts/taskGenerator'
@@ -28,6 +29,7 @@ export default function TaskHome() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [showErrorBank, setShowErrorBank] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -79,6 +81,8 @@ export default function TaskHome() {
         { module: 'taskGenerator', system, messages: [{ role: 'user', content: '請生成今日任務' }] },
         isTaskJson,
       )
+      // 記下本任務埋設驗證的錯誤，完成任務時據此推進狀態機
+      taskJson.verify_error_ids = ((errData ?? []) as ErrorRecord[]).map((e) => e.id)
 
       const saved = await createTask(profile.id, language as Language, taskJson)
       setTask(saved)
@@ -179,6 +183,26 @@ export default function TaskHome() {
           </div>
         )}
       </section>
+
+      <section className="mt-6">
+        <button
+          onClick={() => setShowErrorBank(true)}
+          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">📚</span>
+            <span className="text-left">
+              <span className="block font-bold">錯誤庫</span>
+              <span className="block text-sm text-slate-500">學習中・驗證中・已攻克</span>
+            </span>
+          </span>
+          <span className="text-slate-300">→</span>
+        </button>
+      </section>
+
+      {showErrorBank && (
+        <ErrorBank profileId={profile.id} language={language} onClose={() => setShowErrorBank(false)} />
+      )}
     </main>
   )
 }

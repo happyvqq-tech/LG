@@ -39,6 +39,10 @@ export interface TaskJson {
   speaking_transcript?: ChatMessage[]
   grading?: GraderResult
   writing_answer?: string
+  /** 生成任務時埋設驗證的 pending_verify 錯誤 id */
+  verify_error_ids?: string[]
+  /** 本任務批改後寫入 errors 表的新錯誤 id（重新批改時據此清除重寫） */
+  inserted_error_ids?: string[]
 }
 
 export interface Task {

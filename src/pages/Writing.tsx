@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
+import { syncTaskErrors } from '../lib/errorEngine'
 import { graderSystemPrompt, graderUserMessage, isGraderResult } from '../lib/prompts/grader'
 import { updateTaskJson } from '../lib/taskService'
 import { diffTokens } from '../lib/textDiff'
@@ -64,7 +65,9 @@ export default function Writing() {
       )
       setGrading(result)
       const updated = await updateTaskJson(task, { grading: result, writing_answer: answer.trim() })
-      setTask(updated)
+      // 新錯誤寫入錯誤記憶庫（status='active'；重新批改會先清掉上一輪寫入的）
+      const synced = await syncTaskErrors(updated, result.errors)
+      setTask(synced)
     } catch (e: unknown) {
       const msg = e instanceof ClaudeError ? e.message : `批改失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
