@@ -1,1 +1,11 @@
-# 於步驟 2 設定
+name = "lglearning-worker"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# 正式環境的 CORS 白名單（GitHub Pages 網址，結尾不加斜線）
+# 部署前改成你的 Pages 網址，例如 https://happyvqq-tech.github.io
+[vars]
+ALLOWED_ORIGIN = "https://happyvqq-tech.github.io"
+
+# API key 不放這裡！用 secret：
+#   wrangler secret put ANTHROPIC_API_KEY
