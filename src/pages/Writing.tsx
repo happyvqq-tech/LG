@@ -1,8 +1,189 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useActiveTask } from '../lib/useActiveTask'
+import { callClaudeJSON, ClaudeError } from '../lib/claude'
+import { graderSystemPrompt, graderUserMessage, isGraderResult } from '../lib/prompts/grader'
+import { updateTaskJson } from '../lib/taskService'
+import { diffTokens } from '../lib/textDiff'
+import DrillModal from '../components/DrillModal'
+import type { GraderError, GraderResult } from '../lib/types'
+
+function countUnits(text: string, language: string): number {
+  if (language === '日文') return Array.from(text.trim()).length
+  return text.trim() === '' ? 0 : text.trim().split(/\s+/).length
+}
+
 export default function Writing() {
+  const navigate = useNavigate()
+  const { task, setTask, loading } = useActiveTask()
+  const [answer, setAnswer] = useState('')
+  const [grading, setGrading] = useState<GraderResult | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+  const [drillError, setDrillError] = useState<GraderError | null>(null)
+
+  // 復原已作答/已批改的狀態（重新整理續作）
+  useEffect(() => {
+    if (!task) return
+    if (task.task_json.writing_answer) setAnswer(task.task_json.writing_answer)
+    if (task.task_json.grading) setGrading(task.task_json.grading)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id])
+
+  const diff = useMemo(() => {
+    if (!grading || !task) return null
+    return diffTokens(grading.minimal_fix, grading.native_version, task.language)
+  }, [grading, task])
+
+  if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
+
+  const language = task.language === '日文' ? '日文' : '英文'
+  const unitName = language === '日文' ? '字' : '字（words）'
+
+  async function submit() {
+    if (!task || !answer.trim() || submitting) return
+    setSubmitting(true)
+    setErrorMsg('')
+    try {
+      const result = await callClaudeJSON<GraderResult>(
+        {
+          module: 'grader',
+          system: graderSystemPrompt(language),
+          messages: [
+            {
+              role: 'user',
+              content: graderUserMessage({
+                writingPrompt: task.task_json.writing_prompt,
+                answer: answer.trim(),
+                speakingTranscript: task.task_json.speaking_transcript,
+              }),
+            },
+          ],
+        },
+        isGraderResult,
+      )
+      setGrading(result)
+      const updated = await updateTaskJson(task, { grading: result, writing_answer: answer.trim() })
+      setTask(updated)
+    } catch (e: unknown) {
+      const msg = e instanceof ClaudeError ? e.message : `批改失敗：${String((e as Error).message)}`
+      setErrorMsg(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-2xl font-bold">Writing</h1>
-      <p className="mt-2 text-slate-500">頁面建置中（步驟 9 實作）</p>
+    <main className="mx-auto max-w-xl p-6 pb-12">
+      <header className="pt-2">
+        <p className="text-sm font-semibold text-teal-700">第四關・寫作</p>
+        <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
+      </header>
+
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow">
+        <p className="font-semibold text-slate-700">{task.task_json.writing_prompt}</p>
+        <textarea
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          rows={6}
+          disabled={submitting}
+          placeholder="30-80 字即可完成"
+          className="mt-3 w-full rounded-xl border border-slate-300 p-3 text-lg"
+        />
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-sm text-slate-400">
+            {countUnits(answer, language)} {unitName}
+          </span>
+          <button
+            onClick={() => void submit()}
+            disabled={submitting || !answer.trim()}
+            className="rounded-xl bg-teal-600 px-6 py-2.5 font-bold text-white disabled:opacity-40"
+          >
+            {submitting ? '批改中…' : grading ? '重新批改' : '提交批改'}
+          </button>
+        </div>
+        {errorMsg && (
+          <div className="mt-3 rounded-xl bg-red-50 p-3 text-red-600">
+            {errorMsg}
+            <button
+              onClick={() => void submit()}
+              className="ml-3 rounded bg-red-600 px-3 py-1 font-semibold text-white"
+            >
+              重試
+            </button>
+          </div>
+        )}
+      </section>
+
+      {grading && diff && (
+        <section className="mt-6">
+          <h2 className="text-lg font-bold text-slate-700">批改結果</h2>
+
+          {grading.praise && (
+            <p className="mt-3 rounded-2xl bg-green-50 p-4 text-green-700">👍 {grading.praise}</p>
+          )}
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl bg-white p-4 shadow">
+              <p className="text-sm font-semibold text-slate-500">最小修改版</p>
+              <p className="mt-2 leading-relaxed">
+                {diff.a.map((t, i) => (
+                  <span key={i} className={t.changed ? 'rounded bg-amber-200' : ''}>
+                    {t.text}
+                  </span>
+                ))}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 shadow">
+              <p className="text-sm font-semibold text-slate-500">母語自然版</p>
+              <p className="mt-2 leading-relaxed">
+                {diff.b.map((t, i) => (
+                  <span key={i} className={t.changed ? 'rounded bg-sky-200' : ''}>
+                    {t.text}
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+
+          {grading.errors.length === 0 && (
+            <p className="mt-4 rounded-2xl bg-white p-4 text-center text-slate-500 shadow">
+              沒有需要修正的錯誤 🎉
+            </p>
+          )}
+
+          <div className="mt-4 grid gap-3">
+            {grading.errors.map((e, i) => (
+              <div key={i} className="rounded-2xl bg-white p-4 shadow">
+                <span className="inline-block rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-600">
+                  {e.error_type}
+                </span>
+                <p className="mt-2">
+                  <span className="text-red-500 line-through">{e.original}</span>
+                  {' → '}
+                  <span className="font-semibold text-green-600">{e.corrected}</span>
+                </p>
+                <p className="mt-1 text-sm text-slate-500">{e.rule_note}</p>
+                <button
+                  onClick={() => setDrillError(e)}
+                  className="mt-3 rounded-xl bg-teal-50 px-4 py-2 font-semibold text-teal-700"
+                >
+                  ⏱ 30 秒微課
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => navigate('/feedback')}
+            className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
+          >
+            完成寫作 → 任務總結
+          </button>
+        </section>
+      )}
+
+      {drillError && <DrillModal error={drillError} onClose={() => setDrillError(null)} />}
     </main>
   )
 }
