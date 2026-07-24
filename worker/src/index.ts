@@ -82,6 +82,15 @@ export default {
       return jsonResponse({ error: 'rate_limited', message: '請求太頻繁，請一分鐘後再試' }, 429, origin)
     }
 
+    // 診斷：key 未設定時直接告知，避免無意義的 401
+    if (!env.ANTHROPIC_API_KEY) {
+      return jsonResponse(
+        { error: 'missing_api_key', message: 'Worker 沒有讀到 ANTHROPIC_API_KEY，請在 Cloudflare Worker Settings → Variables and Secrets 新增' },
+        500,
+        origin,
+      )
+    }
+
     let body: ChatRequestBody
     try {
       body = (await request.json()) as ChatRequestBody
@@ -108,8 +117,23 @@ export default {
       }),
     })
 
-    // 回傳 Anthropic 原始 JSON（含錯誤時的原始狀態碼）
     const text = await upstream.text()
+
+    // 診斷：401 時附加 key 前綴資訊協助排查（不暴露完整 key）
+    if (upstream.status === 401) {
+      const prefix = env.ANTHROPIC_API_KEY.slice(0, 7)
+      const len = env.ANTHROPIC_API_KEY.length
+      return jsonResponse(
+        {
+          error: 'anthropic_auth_failed',
+          message: `Anthropic 回傳 401。key 前綴 "${prefix}…"（共 ${len} 字元）。請確認：1) key 以 sk-ant- 開頭 2) 在 console.anthropic.com 仍為有效狀態`,
+          upstream: JSON.parse(text),
+        },
+        401,
+        origin,
+      )
+    }
+
     return new Response(text, {
       status: upstream.status,
       headers: { 'content-type': 'application/json', ...corsHeaders(origin) },
