@@ -62,6 +62,18 @@ export default {
     const origin = request.headers.get('Origin')
     const url = new URL(request.url)
 
+    // 診斷頁：瀏覽器直接打開 /health 即可看 key 是否設好
+    if (url.pathname === '/health' && request.method === 'GET') {
+      const hasKey = !!env.ANTHROPIC_API_KEY
+      const prefix = hasKey ? env.ANTHROPIC_API_KEY.slice(0, 10) + '…' : '（未設定）'
+      const len = hasKey ? env.ANTHROPIC_API_KEY.length : 0
+      const origin_setting = env.ALLOWED_ORIGIN || '（未設定）'
+      return new Response(
+        JSON.stringify({ status: hasKey ? 'ok' : 'missing_key', key_prefix: prefix, key_length: len, allowed_origin: origin_setting }, null, 2),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+
     if (!origin || !isAllowedOrigin(origin, env)) {
       return new Response(JSON.stringify({ error: 'origin_not_allowed' }), {
         status: 403,
