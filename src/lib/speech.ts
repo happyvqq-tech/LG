@@ -97,6 +97,7 @@ export function splitSentences(text: string): string[] {
 
 interface SpeechRecognitionResultLike {
   transcript: string
+  confidence?: number
 }
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
@@ -134,21 +135,36 @@ export class HoldToTalkRecognizer {
   private transcript = ''
   private finishResolve: ((text: string) => void) | null = null
   private finishReject: ((err: Error) => void) | null = null
+  /**
+   * 最近一次 onresult 事件裡，各段辨識結果信心值的平均（0~1）。
+   * 多數瀏覽器（含大部分 Android Chrome）不回傳這個值時恆為 0——呼叫端
+   * 遇到 0 應視為「沒有這個訊號」，不要當成「唸得很爛」。
+   */
+  lastConfidence = 0
 
   start(lang: Language): void {
     const Ctor = getRecognitionCtor()
     if (!Ctor) throw new Error('此瀏覽器不支援語音辨識，請改用鍵盤輸入')
     this.transcript = ''
+    this.lastConfidence = 0
     const rec = new Ctor()
     rec.lang = LANG_CODE[lang]
     rec.interimResults = true
     rec.continuous = true
     rec.onresult = (event) => {
       let text = ''
+      let confSum = 0
+      let confCount = 0
       for (let i = 0; i < event.results.length; i++) {
-        text += event.results[i][0]?.transcript ?? ''
+        const alt = event.results[i][0]
+        text += alt?.transcript ?? ''
+        if (typeof alt?.confidence === 'number' && alt.confidence > 0) {
+          confSum += alt.confidence
+          confCount++
+        }
       }
       this.transcript = text
+      if (confCount > 0) this.lastConfidence = confSum / confCount
     }
     rec.onerror = (event) => {
       // no-speech 不算失敗，只是沒聽到內容

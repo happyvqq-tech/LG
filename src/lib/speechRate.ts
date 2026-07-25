@@ -8,22 +8,22 @@ export type SpeedLevel = '慢' | '正常' | '快' | '很快' | '極快'
 export const SPEED_LEVELS: SpeedLevel[] = ['慢', '正常', '快', '很快', '極快']
 
 /**
- * speechSynthesis 的 rate 值。
- * 2.0 以上多數語音會開始糊掉，故極快設在 2.0。
+ * speechSynthesis 的 rate 值，採用一般影音/Podcast App 慣用的倍速刻度，
+ * 使用者一看數字就懂。2.0 以上多數語音會開始糊掉，故極快設在 2.0。
  */
 export const SPEED_RATE: Record<SpeedLevel, number> = {
-  慢: 0.6,
+  慢: 0.75,
   正常: 1,
-  快: 1.3,
-  很快: 1.6,
+  快: 1.25,
+  很快: 1.5,
   極快: 2,
 }
 
 export const SPEED_HINT: Record<SpeedLevel, string> = {
   慢: '逐字聽清楚，適合第一次接觸或跟讀',
   正常: '母語者的一般語速',
-  快: '新聞播報的速度',
-  很快: '練習聽力反應速度',
+  快: '稍微加快，練習反應',
+  很快: '新聞播報的速度',
   極快: '極限訓練，聽得懂這個速度就穩了',
 }
 

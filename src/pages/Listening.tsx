@@ -159,6 +159,16 @@ export default function Listening() {
           </button>
         </div>
 
+        <button
+          onClick={() => {
+            stop()
+            navigate('/listening-cloze')
+          }}
+          className="mt-4 rounded-full bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700"
+        >
+          📝 換成挖空聽寫測驗（額外加練）
+        </button>
+
         {errorMsg && <p className="mt-4 text-center text-red-600">{errorMsg}</p>}
       </section>
 

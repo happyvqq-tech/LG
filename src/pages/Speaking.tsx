@@ -159,6 +159,15 @@ export default function Speaking() {
           <span className="shrink-0 text-xs text-slate-400">語速</span>
           <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
         </div>
+        <button
+          onClick={() => {
+            stopSpeaking()
+            navigate('/shadowing')
+          }}
+          className="mt-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700"
+        >
+          🔁 換成跟讀朗讀練習（額外加練發音）
+        </button>
       </header>
 
       <section className="mt-3 flex-1 space-y-3 overflow-y-auto rounded-2xl bg-white p-4 shadow-inner">

@@ -1,0 +1,282 @@
+// 跟讀朗讀：AI 唸一句、使用者跟讀一句，依文字吻合度＋跟上 AI 節奏的程度估算分數。
+// 每句到達 80 分才能進下一句；卡住的話（麥克風/口音辨識不穩）可以跳過，不硬卡關。
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useActiveTask } from '../lib/useActiveTask'
+import { speak, splitSentences, stopSpeaking, sttSupported, ttsSupported, HoldToTalkRecognizer } from '../lib/speech'
+import { computeShadowScore, SHADOW_PASS_THRESHOLD, type ShadowScoreResult } from '../lib/prosodyScore'
+import { logActivity } from '../lib/streakService'
+import TaskNav from '../components/TaskNav'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
+
+type Phase = 'idle' | 'ai-reading' | 'recording' | 'scored'
+
+export default function Shadowing() {
+  const navigate = useNavigate()
+  const { task, loading } = useActiveTask()
+  const sentences = useMemo(() => splitSentences(task?.task_json.listening_script ?? ''), [task])
+  const lang = task?.language ?? '英文'
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
+
+  const [index, setIndex] = useState(0)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [attempts, setAttempts] = useState(0)
+  const [result, setResult] = useState<ShadowScoreResult | null>(null)
+  const [recognizedText, setRecognizedText] = useState('')
+  const [passed, setPassed] = useState<Set<number>>(new Set())
+  const [errorMsg, setErrorMsg] = useState('')
+  const [finished, setFinished] = useState(false)
+  const [hasHeardDemo, setHasHeardDemo] = useState(false)
+
+  const recognizerRef = useRef<HoldToTalkRecognizer | null>(null)
+  const aiDurationRef = useRef(0)
+  const userStartRef = useRef(0)
+  const loggedRef = useRef(false)
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking()
+      recognizerRef.current?.cancel()
+    }
+  }, [])
+
+  const sentence = sentences[index] ?? ''
+  const pass = result !== null && result.score >= SHADOW_PASS_THRESHOLD
+
+  function resetForSentence() {
+    setPhase('idle')
+    setAttempts(0)
+    setResult(null)
+    setRecognizedText('')
+    setErrorMsg('')
+    setHasHeardDemo(false)
+    aiDurationRef.current = 0
+  }
+
+  async function playAiDemo() {
+    stopSpeaking()
+    setErrorMsg('')
+    setPhase('ai-reading')
+    const t0 = performance.now()
+    try {
+      await speak(sentence, lang, rate)
+      aiDurationRef.current = performance.now() - t0
+      setHasHeardDemo(true)
+    } catch (e: unknown) {
+      setErrorMsg((e as Error).message)
+    } finally {
+      setPhase('idle')
+    }
+  }
+
+  function startRecording() {
+    if (phase === 'ai-reading' || phase === 'recording') return
+    stopSpeaking()
+    try {
+      const rec = new HoldToTalkRecognizer()
+      recognizerRef.current = rec
+      rec.start(lang)
+      userStartRef.current = performance.now()
+      setPhase('recording')
+      setErrorMsg('')
+    } catch (e: unknown) {
+      setErrorMsg((e as Error).message)
+    }
+  }
+
+  async function stopRecording() {
+    if (phase !== 'recording') return
+    const userDurationMs = performance.now() - userStartRef.current
+    try {
+      const transcript = (await recognizerRef.current?.stop()) ?? ''
+      const confidence = recognizerRef.current?.lastConfidence ?? 0
+      if (!transcript) {
+        setErrorMsg('沒有聽清楚，請再試一次')
+        setPhase('idle')
+        return
+      }
+      setRecognizedText(transcript)
+      const scored = computeShadowScore({
+        targetText: sentence,
+        recognizedText: transcript,
+        confidence,
+        aiDurationMs: aiDurationRef.current,
+        userDurationMs,
+      })
+      setResult(scored)
+      setAttempts((a) => a + 1)
+      setPhase('scored')
+      if (scored.score >= SHADOW_PASS_THRESHOLD) {
+        setPassed((prev) => new Set(prev).add(index))
+      }
+    } catch (e: unknown) {
+      setErrorMsg((e as Error).message)
+      setPhase('idle')
+    }
+  }
+
+  function goNext(skip = false) {
+    if (!skip && !pass) return
+    stopSpeaking()
+    if (index + 1 >= sentences.length) {
+      setFinished(true)
+      if (!loggedRef.current && task) {
+        loggedRef.current = true
+        void logActivity(task.profile_id).catch(() => undefined)
+      }
+    } else {
+      setIndex((i) => i + 1)
+      resetForSentence()
+    }
+  }
+
+  if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
+
+  if (!sttSupported() || !ttsSupported()) {
+    return (
+      <main className="mx-auto max-w-xl p-6">
+        <TaskNav current="speaking" />
+        <p className="rounded-xl bg-amber-50 p-4 text-amber-700">
+          此瀏覽器不支援語音播放或語音辨識，跟讀朗讀需要兩者才能運作，請改用 Chrome 或 Edge。
+        </p>
+      </main>
+    )
+  }
+
+  if (sentences.length === 0) {
+    return (
+      <main className="mx-auto max-w-xl p-6">
+        <TaskNav current="speaking" />
+        <p className="rounded-xl bg-amber-50 p-4 text-amber-700">這個任務沒有聽力稿可以跟讀。</p>
+      </main>
+    )
+  }
+
+  if (finished) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6">
+        <TaskNav current="speaking" />
+        <div className="mt-8 rounded-3xl bg-white p-8 text-center shadow">
+          <p className="text-4xl">🏆</p>
+          <p className="mt-3 text-xl font-bold">跟讀朗讀完成！</p>
+          <p className="mt-1 text-slate-500">全部 {sentences.length} 句都跟讀過關了</p>
+          <button
+            onClick={() => navigate('/speaking')}
+            className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white"
+          >
+            回情境對話
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6 pb-10">
+      <TaskNav current="speaking" />
+      <header>
+        <p className="text-sm font-semibold text-teal-700">🔁 跟讀朗讀（額外練習）</p>
+        <h1 className="mt-1 text-xl font-bold">{task.task_json.scenario_title}</h1>
+        <p className="mt-1 text-sm text-slate-400">
+          第 {index + 1} / {sentences.length} 句・已過關 {passed.size} 句
+        </p>
+      </header>
+
+      <div className="mt-2 flex gap-1">
+        {sentences.map((_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 flex-1 rounded-full ${
+              passed.has(i) ? 'bg-teal-500' : i === index ? 'bg-teal-200' : 'bg-slate-200'
+            }`}
+          />
+        ))}
+      </div>
+
+      <section className="mt-6 rounded-3xl bg-white p-6 shadow">
+        <p className="text-lg font-semibold leading-relaxed">{sentence}</p>
+
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            onClick={() => void playAiDemo()}
+            disabled={phase === 'ai-reading' || phase === 'recording'}
+            className="flex items-center gap-1.5 rounded-full bg-slate-100 px-4 py-2.5 font-semibold text-slate-600 disabled:opacity-40"
+          >
+            {phase === 'ai-reading' ? '🔊 播放中…' : '▶ 聽 AI 示範'}
+          </button>
+          <div className="min-w-0 flex-1">
+            <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
+          </div>
+        </div>
+
+        <button
+          onPointerDown={startRecording}
+          onPointerUp={() => void stopRecording()}
+          onPointerLeave={() => void stopRecording()}
+          onPointerCancel={() => void stopRecording()}
+          disabled={!hasHeardDemo && phase !== 'recording'}
+          className={`mt-5 w-full touch-none select-none rounded-xl py-4 text-lg font-bold text-white transition disabled:opacity-40 ${
+            phase === 'recording' ? 'scale-[0.98] bg-red-500' : 'bg-teal-600'
+          }`}
+        >
+          {phase === 'recording' ? '🎙 跟讀中…放開送出' : '🎙 按住跟讀這句'}
+        </button>
+        {!hasHeardDemo && (
+          <p className="mt-1.5 text-center text-xs text-slate-400">先聽一次 AI 示範，再按住跟讀</p>
+        )}
+
+        {errorMsg && <p className="mt-3 text-center text-red-600">{errorMsg}</p>}
+
+        {result && (
+          <div
+            className={`mt-4 rounded-2xl p-4 ${
+              pass ? 'bg-green-50 ring-1 ring-green-200' : 'bg-amber-50 ring-1 ring-amber-200'
+            }`}
+          >
+            <div className="flex items-baseline justify-between">
+              <p className={`text-2xl font-bold ${pass ? 'text-green-600' : 'text-amber-600'}`}>
+                {result.score} 分
+              </p>
+              <p className="text-xs text-slate-400">80 分過關</p>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              你說的：「{recognizedText}」
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              文字吻合 {Math.round(result.textAccuracy * 100)}% ・ 節奏接近度 {Math.round(result.timing * 100)}%
+              （瀏覽器語音辨識估算，非真正聲學評分）
+            </p>
+            <div className="mt-3 flex gap-2">
+              {!pass && (
+                <button
+                  onClick={resetForSentence}
+                  className="flex-1 rounded-xl bg-slate-100 py-2.5 font-semibold text-slate-600"
+                >
+                  再試一次
+                </button>
+              )}
+              {pass ? (
+                <button
+                  onClick={() => goNext(false)}
+                  className="flex-1 rounded-xl bg-teal-600 py-2.5 font-bold text-white"
+                >
+                  {index + 1 < sentences.length ? '下一句 →' : '完成 🎉'}
+                </button>
+              ) : (
+                attempts >= 2 && (
+                  <button
+                    onClick={() => goNext(true)}
+                    className="flex-1 rounded-xl bg-slate-50 py-2.5 text-sm font-semibold text-slate-400"
+                  >
+                    跳過這句
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    </main>
+  )
+}

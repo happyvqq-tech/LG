@@ -1,5 +1,5 @@
-// 朗讀速度選擇器：慢／正常／快／很快／極快
-import { SPEED_HINT, SPEED_LEVELS, type SpeedLevel } from '../lib/speechRate'
+// 朗讀速度選擇器：0.75x／1x／1.25x／1.5x／2x（慢／正常／快／很快／極快）
+import { SPEED_HINT, SPEED_LEVELS, SPEED_RATE, type SpeedLevel } from '../lib/speechRate'
 
 export default function SpeedPicker({
   level,
@@ -21,6 +21,7 @@ export default function SpeedPicker({
             key={lv}
             onClick={() => onChange(lv)}
             aria-pressed={level === lv}
+            aria-label={`${lv}（${SPEED_RATE[lv]}倍速）`}
             className={`min-h-0 rounded-full font-semibold transition ${
               compact ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-2 text-sm'
             } ${
@@ -29,7 +30,7 @@ export default function SpeedPicker({
                 : 'bg-slate-100 text-slate-600 active:bg-slate-200'
             }`}
           >
-            {lv}
+            {SPEED_RATE[lv]}x
           </button>
         ))}
       </div>
