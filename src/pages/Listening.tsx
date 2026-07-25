@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
 import { updateTaskJson } from '../lib/taskService'
-import TaskNav, { type SkillStep } from '../components/TaskNav'
+import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
-
-const LOCKED_STEPS: SkillStep[] = ['reading', 'speaking', 'writing']
 
 export default function Listening() {
   const navigate = useNavigate()
@@ -81,7 +79,7 @@ export default function Listening() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
-      <TaskNav current="listening" locked={canProceed ? [] : LOCKED_STEPS} />
+      <TaskNav current="listening" />
       <header>
         <p className="text-sm font-semibold text-teal-700">第一關・聽力</p>
         <h1 className="mt-1 break-words text-2xl font-bold">{task.task_json.scenario_title}</h1>

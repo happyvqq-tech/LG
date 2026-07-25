@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, stopSpeaking } from '../lib/speech'
@@ -44,13 +44,7 @@ export default function Reading() {
   const [speakingChunk, setSpeakingChunk] = useState<number | null>(null)
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
-  // 聽力關卡沒達成就不能進閱讀，不然「聽兩次才能繼續」形同虛設（見稽核報告 P0-2）
-  useEffect(() => {
-    if (task && !task.task_json.listening_done) navigate('/listening', { replace: true })
-  }, [task, navigate])
-
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
-  if (!task.task_json.listening_done) return null
 
   const { listening_script, chunks } = task.task_json
   const lang = task.language

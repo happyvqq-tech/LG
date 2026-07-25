@@ -36,18 +36,12 @@ export default function Writing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id])
 
-  // 聽力關卡沒達成就不能進寫作，不然「聽兩次才能繼續」形同虛設（見稽核報告 P0-2）
-  useEffect(() => {
-    if (task && !task.task_json.listening_done) navigate('/listening', { replace: true })
-  }, [task, navigate])
-
   const diff = useMemo(() => {
     if (!grading || !task) return null
     return diffTokens(grading.minimal_fix, grading.native_version, task.language)
   }, [grading, task])
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
-  if (!task.task_json.listening_done) return null
 
   const language = task.language === '日文' ? '日文' : '英文'
   const unitName = language === '日文' ? '字' : '字（words）'

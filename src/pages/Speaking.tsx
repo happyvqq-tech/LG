@@ -39,11 +39,6 @@ export default function Speaking() {
 
   taskRef.current = task
 
-  // 聽力關卡沒達成就不能進口說，不然「聽兩次才能繼續」形同虛設（見稽核報告 P0-2）
-  useEffect(() => {
-    if (task && !task.task_json.listening_done) navigate('/listening', { replace: true })
-  }, [task, navigate])
-
   useEffect(() => {
     return () => {
       stopSpeaking()
@@ -152,7 +147,6 @@ export default function Speaking() {
   }
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
-  if (!task.task_json.listening_done) return null
 
   return (
     <main className="mx-auto flex h-dvh max-w-xl lg:max-w-3xl flex-col p-4">
