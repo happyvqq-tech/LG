@@ -16,6 +16,7 @@ import { BLANK } from '../lib/prompts/quizGenerator'
 import { speak, stopSpeaking } from '../lib/speech'
 import { examLanguage, type ExamSystem } from '../data/vocabLists'
 import { useSpeechRate } from '../lib/useSpeechRate'
+import { logActivity } from '../lib/streakService'
 import { DEFAULT_VOCAB_PREF, type Language } from '../lib/types'
 
 const VERDICT_STYLE: Record<string, string> = {
@@ -122,6 +123,7 @@ export default function VocabQuiz() {
     setSaving(true)
     try {
       await submitQuiz(profile.id, language, answers)
+      void logActivity(profile.id).catch(() => undefined)
       navigate('/vocab')
     } catch (e: unknown) {
       setErrorMsg(`儲存成績失敗：${String((e as Error).message)}`)

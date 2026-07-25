@@ -218,6 +218,28 @@ export interface VocabPref {
 
 export const DEFAULT_VOCAB_PREF: VocabPref = { exam: 'TOEIC', exam_level: '650', daily_new: 10 }
 
+/** 虛詞卡（對應 particle_cards 表，間隔重複排程同 srs.ts） */
+export interface ParticleCard {
+  id: string
+  profile_id: string
+  language: Language
+  word: string
+  stage: number
+  ease: number
+  interval_days: number
+  repetitions: number
+  lapses: number
+  due_date: string
+  created_at: string
+}
+
+/** 每日活動紀錄（對應 activity_log 表，用於計算連續天數） */
+export interface ActivityLogRow {
+  id: string
+  profile_id: string
+  activity_date: string
+}
+
 export interface TaiwaneseScriptLine {
   hanji: string
   tailo: string

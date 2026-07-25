@@ -1,14 +1,29 @@
 // 覆盤加練：一次一題，即答即對，最後給成績
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DrillQuestion } from '../lib/types'
 
-export default function PracticeQuiz({ questions }: { questions: DrillQuestion[] }) {
+export default function PracticeQuiz({
+  questions,
+  onFinish,
+}: {
+  questions: DrillQuestion[]
+  /** 第一次做完整輪（含「再練一次」重來）時呼叫一次，用於記錄當日活動等 */
+  onFinish?: () => void
+}) {
   const [index, setIndex] = useState(0)
   const [picked, setPicked] = useState<string | null>(null)
   const [correct, setCorrect] = useState(0)
+  const firedRef = useRef(false)
 
   const q = questions[index]
   const finished = index >= questions.length
+
+  useEffect(() => {
+    if (finished && !firedRef.current) {
+      firedRef.current = true
+      onFinish?.()
+    }
+  }, [finished, onFinish])
 
   if (finished) {
     return (

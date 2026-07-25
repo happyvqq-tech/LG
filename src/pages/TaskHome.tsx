@@ -9,6 +9,7 @@ import { createTask, getTodayPendingTask, setActiveTaskId } from '../lib/taskSer
 import { downloadIcs } from '../lib/ics'
 import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
+import TodayDashboard from '../components/TodayDashboard'
 import { LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson } from '../lib/types'
 
 function pickRandom<T>(list: T[], count: number): T[] {
@@ -131,6 +132,8 @@ export default function TaskHome() {
           換人
         </Link>
       </header>
+
+      <TodayDashboard profile={profile} task={task} />
 
       {profile.daily_plan && profile.daily_plan.days.length > 0 && (
         <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">

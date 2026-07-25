@@ -68,6 +68,10 @@ export default function Speaking() {
   async function requestReply(history: ChatMessage[]) {
     const t = taskRef.current
     if (!t) return
+    // 開場白發生在使用者還沒點過任何東西時（頁面剛載入），iOS Safari 會把
+    // 沒有手勢觸發的 speechSynthesis.speak() 靜默吃掉。之後的回覆都跟在
+    // 使用者按住說話／送出之後，才自動唸出來；開場白可用訊息旁的 🔊 手動聽。
+    const isOpening = history.length === 0
     setSending(true)
     setErrorMsg('')
     try {
@@ -88,7 +92,9 @@ export default function Speaking() {
       // 逐字稿全程落庫
       const updated = await updateTaskJson(t, { speaking_transcript: withReply })
       setTask(updated)
-      void speak(stripCompleteMarker(reply), t.language, rateRef.current).catch(() => undefined)
+      if (!isOpening) {
+        void speak(stripCompleteMarker(reply), t.language, rateRef.current).catch(() => undefined)
+      }
     } catch (e: unknown) {
       const msg = e instanceof ClaudeError ? e.message : `對話失敗：${String((e as Error).message)}`
       setErrorMsg(msg)

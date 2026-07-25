@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useProfile } from '../lib/profileContext'
 import { addNewCards, gradeCard, getDueCards } from '../lib/vocabService'
+import { logActivity } from '../lib/streakService'
 import { MODE_LABELS, modeForStage, type DrillMode, type Grade } from '../lib/srs'
 import { speak, stopSpeaking } from '../lib/speech'
 import { ClaudeError } from '../lib/claude'
@@ -82,6 +83,7 @@ export default function VocabSession() {
   const [done, setDone] = useState(false)
   const [tally, setTally] = useState({ right: 0, wrong: 0 })
   const startedRef = useRef(false)
+  const loggedActivityRef = useRef(false)
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   const card = queue[index] as VocabCard | undefined
@@ -133,12 +135,8 @@ export default function VocabSession() {
 
   useEffect(() => () => stopSpeaking(), [])
 
-  // 聽辨關卡進入時自動播一次
-  useEffect(() => {
-    if (card && mode === 'listen' && !revealed) {
-      void speak(card.word, language, rate).catch(() => undefined)
-    }
-  }, [card, mode, revealed, language, rate])
+  // 聽辨關卡刻意不自動播放：iOS Safari 沒有使用者手勢的 speechSynthesis.speak()
+  // 會被靜默吃掉（不報錯、也不出聲），使用者會以為壞了。改為下方大喇叭按鈕手動播放。
 
   if (!profile) return null
 
@@ -160,6 +158,10 @@ export default function VocabSession() {
     if (!card || saving) return
     setSaving(true)
     try {
+      if (!loggedActivityRef.current && profile) {
+        loggedActivityRef.current = true
+        void logActivity(profile.id).catch(() => undefined)
+      }
       await gradeCard(card, grade)
       setTally((t) =>
         grade === 'again' ? { ...t, wrong: t.wrong + 1 } : { ...t, right: t.right + 1 },
@@ -346,7 +348,7 @@ export default function VocabSession() {
               <p className="mt-2 text-sm text-slate-400">
                 {mode === 'recognize' && '這個字是什麼意思？'}
                 {mode === 'recall' && '這個意思的字怎麼寫？'}
-                {mode === 'listen' && '聽到的是哪一個字？'}
+                {mode === 'listen' && '點上面的喇叭聽發音，再選出是哪一個字'}
               </p>
             </div>
 

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../lib/profileContext'
 import { getAllProgress, summarize } from '../lib/classicalService'
+import { getDueParticleCount } from '../lib/particleService'
+import ErrorBank from '../components/ErrorBank'
 import {
   CLASSICAL_INDEX,
   CLASSICAL_LEVELS,
@@ -24,6 +26,8 @@ export default function ClassicalHome() {
   const [level, setLevel] = useState<ClassicalLevel>('入門')
   const [master, setMaster] = useState<MasterFilter>('all')
   const [savingLevel, setSavingLevel] = useState(false)
+  const [showErrorBank, setShowErrorBank] = useState(false)
+  const [particleDue, setParticleDue] = useState(0)
 
   // 成員設定過古文程度就用它當預設起點
   useEffect(() => {
@@ -49,6 +53,11 @@ export default function ClassicalHome() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!profile) return
+    getDueParticleCount(profile.id).then(setParticleDue).catch(() => undefined)
+  }, [profile])
 
   const stats = useMemo(() => summarize(progress), [progress])
 
@@ -101,6 +110,27 @@ export default function ClassicalHome() {
           <p className="text-2xl font-bold text-slate-400">{stats.total}</p>
           <p className="mt-0.5 text-xs text-slate-500">全部篇數</p>
         </div>
+      </section>
+
+      <section className="mt-4 grid grid-cols-2 gap-3">
+        <button
+          onClick={() => navigate('/classical/particles')}
+          className="flex flex-col items-start rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200/60 active:scale-95"
+        >
+          <span className="text-2xl">🈁</span>
+          <span className="mt-1 font-bold">虛詞專練</span>
+          <span className="text-xs text-slate-500">
+            {particleDue > 0 ? `${particleDue} 個待複習` : '18 個核心虛詞'}
+          </span>
+        </button>
+        <button
+          onClick={() => setShowErrorBank(true)}
+          className="flex flex-col items-start rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200/60 active:scale-95"
+        >
+          <span className="text-2xl">📚</span>
+          <span className="mt-1 font-bold">錯誤庫</span>
+          <span className="text-xs text-slate-500">翻譯批改累積的錯誤</span>
+        </button>
       </section>
 
       {/* 分級 */}
@@ -206,6 +236,10 @@ export default function ClassicalHome() {
           )
         })}
       </div>
+
+      {showErrorBank && (
+        <ErrorBank profileId={profile.id} language="古文" onClose={() => setShowErrorBank(false)} />
+      )}
     </main>
   )
 }

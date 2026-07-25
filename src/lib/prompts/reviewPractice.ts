@@ -4,7 +4,7 @@
 import type { DrillQuestion, GraderError } from '../types'
 
 export interface ReviewPracticeInput {
-  language: '英文' | '日文'
+  language: '英文' | '日文' | '古文'
   errors: GraderError[]
 }
 

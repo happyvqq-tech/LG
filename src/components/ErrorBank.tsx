@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { ErrorRecord, ErrorStatus } from '../lib/types'
 
@@ -18,6 +19,7 @@ export default function ErrorBank({
   language: string
   onClose: () => void
 }) {
+  const navigate = useNavigate()
   const [records, setRecords] = useState<ErrorRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
@@ -64,6 +66,25 @@ export default function ErrorBank({
         {errorMsg && <p className="mt-6 rounded-xl bg-red-50 p-4 text-red-600">{errorMsg}</p>}
         {!loading && records.length === 0 && !errorMsg && (
           <p className="mt-10 text-center text-slate-400">還沒有錯誤紀錄，完成任務後會自動累積</p>
+        )}
+
+        {!loading && (openGroups.length > 0 || resolved.length > 0) && (
+          <div className="mt-4 flex gap-2">
+            {openGroups.length > 0 && (
+              <button
+                onClick={() => navigate(`/error-review/${encodeURIComponent(language)}`)}
+                className="flex-1 rounded-xl bg-teal-600 py-3 font-bold text-white active:scale-95"
+              >
+                ⚡ 快速複習
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/weekly-report')}
+              className="rounded-xl bg-white px-4 py-3 font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200"
+            >
+              📊 週報
+            </button>
+          </div>
         )}
 
         {openGroups.map(([type, list]) => (

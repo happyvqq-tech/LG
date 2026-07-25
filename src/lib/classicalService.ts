@@ -1,6 +1,6 @@
 // 古文模組資料層：原文載入（快取）、學習進度讀寫
 import { supabase } from './supabase'
-import { loadClassicalTexts, loadClassicalNotes, CLASSICAL_INDEX } from '../data/classicalIndex'
+import { loadClassicalTexts, loadClassicalNotes, CLASSICAL_INDEX, type ClassicalIndexEntry } from '../data/classicalIndex'
 import type { ClassicalProgress } from './types'
 
 // 動態載入的原文只抓一次，之後留在記憶體
@@ -97,4 +97,18 @@ export function summarize(progress: Record<string, ClassicalProgress>): Classica
     done: rows.filter((r) => r.status === 'done').length,
     total: CLASSICAL_INDEX.length,
   }
+}
+
+/** 最近有進度、還沒讀完的那一篇，供首頁「繼續讀」使用 */
+export async function getResumeEntry(
+  profileId: string,
+): Promise<{ progress: ClassicalProgress; entry: ClassicalIndexEntry } | null> {
+  const all = await getAllProgress(profileId)
+  const reading = Object.values(all)
+    .filter((r) => r.status === 'reading')
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+  const progress = reading[0]
+  if (!progress) return null
+  const entry = getIndexEntry(progress.text_id)
+  return entry ? { progress, entry } : null
 }

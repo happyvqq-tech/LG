@@ -85,6 +85,16 @@ export function addDays(from: Date, days: number): Date {
   return d
 }
 
+/**
+ * 把 toDateString 產出的 'YYYY-MM-DD' 解析回 Date（本地時區午夜）。
+ * 不可用 `new Date(str)`：那會以 UTC 午夜解析，在負時區（如美洲）會被
+ * getDate() 讀成前一天，跟這裡其餘全以本地時間為準的函式互相打架。
+ */
+export function parseDateString(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 /** 排程後的下次複習日 */
 export function nextDueDate(state: SrsState, from = new Date()): string {
   return toDateString(addDays(from, state.intervalDays))

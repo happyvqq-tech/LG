@@ -4,6 +4,8 @@ import { useProfile } from '../lib/profileContext'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import { speak, stopSpeaking, ttsSupported } from '../lib/speech'
 import { getIndexEntry, getNotes, getProgress, getText, saveProgress } from '../lib/classicalService'
+import { syncClassicalErrors } from '../lib/classicalErrorEngine'
+import { logActivity } from '../lib/streakService'
 import {
   annotateSystemPrompt,
   isAnnotateResult,
@@ -200,6 +202,8 @@ export default function ClassicalRead() {
         translation_best: Math.round(result.score),
         para_index: paraIndex,
       }).catch(() => undefined)
+      // 錯誤入庫失敗不該擋住批改結果的顯示
+      await syncClassicalErrors(profile!.id, passage, result.issues).catch(() => undefined)
     } catch (e: unknown) {
       const msg = e instanceof ClaudeError ? e.message : `批改失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
@@ -220,6 +224,7 @@ export default function ClassicalRead() {
       para_index: isLast ? paraIndex : paraIndex + 1,
       status: isLast ? 'done' : 'reading',
     }).catch(() => undefined)
+    void logActivity(profile!.id).catch(() => undefined)
     if (isLast) navigate('/classical')
     else setParaIndex(paraIndex + 1)
   }
