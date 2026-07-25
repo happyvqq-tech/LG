@@ -63,14 +63,23 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
     throw new ClaudeError('rate_limited', '請求太頻繁，請一分鐘後再試')
   }
   if (!res.ok) {
+    // 兩種錯誤格式：Anthropic 的 {error:{message}}、Worker 自己的 {error:'code', message}
     let detail = ''
     try {
-      const j = (await res.json()) as { error?: { message?: string } }
-      detail = j.error?.message ?? ''
+      const j = (await res.json()) as {
+        error?: string | { message?: string }
+        message?: string
+      }
+      if (typeof j.error === 'object' && j.error?.message) detail = j.error.message
+      else if (j.message) detail = j.message
+      else if (typeof j.error === 'string') detail = j.error
     } catch {
       // 非 JSON 錯誤內容，僅回報狀態碼
     }
-    throw new ClaudeError('api', `AI 服務錯誤（${res.status}）${detail}`)
+    if (res.status === 529 || res.status === 503) {
+      throw new ClaudeError('api', 'AI 服務忙碌中，稍等幾秒再按重試')
+    }
+    throw new ClaudeError('api', `AI 服務錯誤（${res.status}）${detail ? '：' + detail : ''}`)
   }
 
   const data = (await res.json()) as AnthropicResponse
