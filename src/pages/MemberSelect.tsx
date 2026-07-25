@@ -13,6 +13,7 @@ export default function MemberSelect() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Profile | null>(null)
+  const [creating, setCreating] = useState(false)
 
   async function fetchProfiles() {
     setLoading(true)
@@ -77,10 +78,19 @@ export default function MemberSelect() {
             </button>
           </div>
         ))}
+
+        <button
+          onClick={() => setCreating(true)}
+          className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 p-6 text-slate-400 transition active:scale-95 active:border-teal-500 active:text-teal-600"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-3xl">+</span>
+          <span className="mt-3 block text-lg font-semibold">新增成員</span>
+        </button>
       </div>
 
       {editing && (
-        <EditDrawer
+        <ProfileDrawer
+          mode="edit"
           profile={editing}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -89,23 +99,36 @@ export default function MemberSelect() {
           }}
         />
       )}
+
+      {creating && (
+        <ProfileDrawer
+          mode="create"
+          onClose={() => setCreating(false)}
+          onSaved={() => {
+            setCreating(false)
+            void fetchProfiles()
+          }}
+        />
+      )}
     </main>
   )
 }
 
-function EditDrawer({
+function ProfileDrawer({
+  mode,
   profile,
   onClose,
   onSaved,
 }: {
-  profile: Profile
+  mode: 'edit' | 'create'
+  profile?: Profile
   onClose: () => void
   onSaved: () => void
 }) {
-  const [name, setName] = useState(profile.name)
-  const [languages, setLanguages] = useState<Language[]>(profile.languages)
-  const [level, setLevel] = useState<Level>(profile.level)
-  const [scenarioPool, setScenarioPool] = useState<Scenario[]>(profile.scenario_pool)
+  const [name, setName] = useState(profile?.name ?? '')
+  const [languages, setLanguages] = useState<Language[]>(profile?.languages ?? ['英文'])
+  const [level, setLevel] = useState<Level>(profile?.level ?? 'B1')
+  const [scenarioPool, setScenarioPool] = useState<Scenario[]>(profile?.scenario_pool ?? [...ALL_SCENARIOS])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
@@ -124,10 +147,14 @@ function EditDrawer({
     }
     setSaving(true)
     setSaveError('')
-    const { error } = await supabase
-      .from('profiles')
-      .update({ name: name.trim(), languages, level, scenario_pool: scenarioPool })
-      .eq('id', profile.id)
+
+    const payload = { name: name.trim(), languages, level, scenario_pool: scenarioPool }
+
+    const { error } =
+      mode === 'edit' && profile
+        ? await supabase.from('profiles').update(payload).eq('id', profile.id)
+        : await supabase.from('profiles').insert(payload)
+
     setSaving(false)
     if (error) {
       setSaveError(`儲存失敗：${error.message}`)
@@ -143,7 +170,7 @@ function EditDrawer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-200" />
-        <h2 className="mt-4 text-xl font-bold">編輯成員</h2>
+        <h2 className="mt-4 text-xl font-bold">{mode === 'create' ? '新增成員' : '編輯成員'}</h2>
 
         <label className="mt-4 block text-sm font-semibold text-slate-600">名稱</label>
         <input
