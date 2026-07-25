@@ -18,6 +18,9 @@ interface ChatRequestBody {
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const RATE_LIMIT_PER_MINUTE = 20
 
+/** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
+const WORKER_VERSION = 2
+
 // in-memory 限流：同一個 Worker isolate 內有效，自用規模足夠
 const rateBuckets = new Map<string, number[]>()
 
@@ -69,7 +72,17 @@ export default {
       const len = hasKey ? env.ANTHROPIC_API_KEY.length : 0
       const origin_setting = env.ALLOWED_ORIGIN || '（未設定）'
       return new Response(
-        JSON.stringify({ status: hasKey ? 'ok' : 'missing_key', key_prefix: prefix, key_length: len, allowed_origin: origin_setting }, null, 2),
+        JSON.stringify(
+          {
+            status: hasKey ? 'ok' : 'missing_key',
+            worker_version: WORKER_VERSION,
+            key_prefix: prefix,
+            key_length: len,
+            allowed_origin: origin_setting,
+          },
+          null,
+          2,
+        ),
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }
