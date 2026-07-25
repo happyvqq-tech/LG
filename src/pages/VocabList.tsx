@@ -5,6 +5,8 @@ import { useProfile } from '../lib/profileContext'
 import { speak } from '../lib/speech'
 import { MAX_STAGE, MODE_LABELS, modeForStage } from '../lib/srs'
 import { examLanguage, type ExamSystem } from '../data/vocabLists'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
 import { DEFAULT_VOCAB_PREF, type Language, type VocabCard } from '../lib/types'
 
 type Filter = 'all' | 'learning' | 'mastered'
@@ -26,6 +28,7 @@ export default function VocabList() {
   const [errorMsg, setErrorMsg] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   const load = useCallback(async () => {
     if (!profile) return
@@ -81,6 +84,11 @@ export default function VocabList() {
         ))}
       </div>
 
+      <div className="mt-3 flex items-center gap-2">
+        <span className="shrink-0 text-sm text-slate-500">語速</span>
+        <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
+      </div>
+
       {loading && <p className="mt-10 text-center text-slate-400">載入中…</p>}
       {errorMsg && <p className="mt-6 rounded-xl bg-red-50 p-4 text-red-600">{errorMsg}</p>}
 
@@ -117,7 +125,7 @@ export default function VocabList() {
               {open && (
                 <div className="mt-3 border-t border-slate-100 pt-3">
                   <button
-                    onClick={() => void speak(c.word, language, 1).catch(() => undefined)}
+                    onClick={() => void speak(c.word, language, rate).catch(() => undefined)}
                     className="rounded-full bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-700"
                   >
                     🔊 聽發音

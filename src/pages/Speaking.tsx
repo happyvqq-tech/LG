@@ -12,6 +12,8 @@ import {
 import { updateTaskJson } from '../lib/taskService'
 import { HoldToTalkRecognizer, speak, stopSpeaking, sttSupported } from '../lib/speech'
 import TaskNav from '../components/TaskNav'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
 import type { ChatMessage, Task } from '../lib/types'
 
 export default function Speaking() {
@@ -25,11 +27,15 @@ export default function Speaking() {
   const [draft, setDraft] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [retryText, setRetryText] = useState<string | null>(null)
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   const recognizerRef = useRef<HoldToTalkRecognizer | null>(null)
   const startedRef = useRef(false)
   const taskRef = useRef<Task | null>(null)
   const listEndRef = useRef<HTMLDivElement>(null)
+  // requestReply 在 closure 裡跑，用 ref 才拿得到最新語速
+  const rateRef = useRef(rate)
+  rateRef.current = rate
 
   taskRef.current = task
 
@@ -82,7 +88,7 @@ export default function Speaking() {
       // 逐字稿全程落庫
       const updated = await updateTaskJson(t, { speaking_transcript: withReply })
       setTask(updated)
-      void speak(stripCompleteMarker(reply), t.language, 1).catch(() => undefined)
+      void speak(stripCompleteMarker(reply), t.language, rateRef.current).catch(() => undefined)
     } catch (e: unknown) {
       const msg = e instanceof ClaudeError ? e.message : `對話失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
@@ -143,6 +149,10 @@ export default function Speaking() {
         <p className="text-sm font-semibold text-teal-700">第三關・口說</p>
         <h1 className="text-xl font-bold">{task.task_json.scenario_title}</h1>
         <p className="mt-1 text-sm text-slate-500">目標：{task.task_json.speaking_goal}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="shrink-0 text-xs text-slate-400">語速</span>
+          <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
+        </div>
       </header>
 
       <section className="mt-3 flex-1 space-y-3 overflow-y-auto rounded-2xl bg-white p-4 shadow-inner">
@@ -156,7 +166,7 @@ export default function Speaking() {
               {m.content === HINT_REQUEST ? '🆘 我卡住了，給點提示' : stripCompleteMarker(m.content)}
               {m.role === 'assistant' && (
                 <button
-                  onClick={() => void speak(stripCompleteMarker(m.content), task.language, 1).catch(() => undefined)}
+                  onClick={() => void speak(stripCompleteMarker(m.content), task.language, rate).catch(() => undefined)}
                   className="ml-2 align-middle text-sm"
                   aria-label="重聽這句"
                 >

@@ -12,6 +12,8 @@ import {
   type AnnotateResult,
   type TranslationGradeResult,
 } from '../lib/prompts/classicalTutor'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
 import {
   buildPunctuationTask,
   punctuationComment,
@@ -60,6 +62,7 @@ export default function ClassicalRead() {
 
   const [speaking, setSpeaking] = useState(false)
   const loadedRef = useRef('')
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   const passage = paras[paraIndex] ?? ''
   // 長段落只取一段來練句讀，避免一次要斷幾十處
@@ -115,7 +118,7 @@ export default function ClassicalRead() {
     )
   }
 
-  async function play(text: string, rate = 0.85) {
+  async function play(text: string) {
     stopSpeaking()
     setSpeaking(true)
     try {
@@ -298,12 +301,26 @@ export default function ClassicalRead() {
               此瀏覽器不支援朗讀，可以自己讀出聲，效果一樣好
             </p>
           )}
+          <div className="mt-3">
+            <p className="text-sm font-semibold text-slate-600">語速</p>
+            <div className="mt-1.5">
+              <SpeedPicker
+                level={speedLevel}
+                onChange={(lv) => {
+                  stopSpeaking()
+                  setSpeaking(false)
+                  setSpeedLevel(lv)
+                }}
+              />
+            </div>
+          </div>
+
           <div className="mt-3 flex gap-2">
             <button
-              onClick={() => void play(passage, 0.85)}
+              onClick={() => void play(passage)}
               className="flex-1 rounded-xl bg-teal-50 py-3 font-semibold text-teal-700 ring-1 ring-teal-200"
             >
-              {speaking ? '朗讀中…' : '🔊 慢速朗讀'}
+              {speaking ? '朗讀中…' : '🔊 朗讀'}
             </button>
             <button
               onClick={() => {

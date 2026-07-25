@@ -15,6 +15,7 @@ import { VERDICT_LABELS } from '../lib/quizGrading'
 import { BLANK } from '../lib/prompts/quizGenerator'
 import { speak, stopSpeaking } from '../lib/speech'
 import { examLanguage, type ExamSystem } from '../data/vocabLists'
+import { useSpeechRate } from '../lib/useSpeechRate'
 import { DEFAULT_VOCAB_PREF, type Language } from '../lib/types'
 
 const VERDICT_STYLE: Record<string, string> = {
@@ -61,6 +62,7 @@ export default function VocabQuiz() {
   const [saving, setSaving] = useState(false)
   const startedRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { rate } = useSpeechRate()
 
   const start = useCallback(async () => {
     if (!profile) return
@@ -220,7 +222,7 @@ export default function VocabQuiz() {
                   {a.usedHint && <span className="ml-1 text-slate-400">（用了提示）</span>}
                 </span>
                 <button
-                  onClick={() => void speak(a.question.card.word, language, 1).catch(() => undefined)}
+                  onClick={() => void speak(a.question.card.word, language, rate).catch(() => undefined)}
                   aria-label={`聽 ${a.question.card.word} 的發音`}
                   className="rounded-full px-2 text-sm"
                 >

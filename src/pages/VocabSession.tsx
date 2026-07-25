@@ -6,6 +6,8 @@ import { MODE_LABELS, modeForStage, type DrillMode, type Grade } from '../lib/sr
 import { speak, stopSpeaking } from '../lib/speech'
 import { ClaudeError } from '../lib/claude'
 import { seedsFor, examLanguage, type ExamSystem } from '../data/vocabLists'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
 import { DEFAULT_VOCAB_PREF, type Language, type VocabCard } from '../lib/types'
 
 /** 一次 session 最多練幾張，避免一口氣太多 */
@@ -80,6 +82,7 @@ export default function VocabSession() {
   const [done, setDone] = useState(false)
   const [tally, setTally] = useState({ right: 0, wrong: 0 })
   const startedRef = useRef(false)
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   const card = queue[index] as VocabCard | undefined
   const mode: DrillMode = card ? modeForStage(card.stage) : 'intro'
@@ -133,9 +136,9 @@ export default function VocabSession() {
   // 聽辨關卡進入時自動播一次
   useEffect(() => {
     if (card && mode === 'listen' && !revealed) {
-      void speak(card.word, language, 0.9).catch(() => undefined)
+      void speak(card.word, language, rate).catch(() => undefined)
     }
-  }, [card, mode, revealed, language])
+  }, [card, mode, revealed, language, rate])
 
   if (!profile) return null
 
@@ -262,7 +265,12 @@ export default function VocabSession() {
         </span>
       </header>
 
-      <p className="mt-4 text-center text-sm font-semibold text-teal-700">
+      <div className="mt-3 flex items-center justify-center gap-2">
+        <span className="shrink-0 text-xs text-slate-400">語速</span>
+        <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
+      </div>
+
+      <p className="mt-3 text-center text-sm font-semibold text-teal-700">
         {MODE_LABELS[mode]}
         <span className="ml-2 text-slate-400">關卡 {card.stage + 1}/5</span>
       </p>
@@ -274,7 +282,7 @@ export default function VocabSession() {
             <div className="flex items-center justify-center gap-3">
               <h2 className="text-3xl font-bold">{card.word}</h2>
               <button
-                onClick={() => void speak(card.word, language, 1).catch(() => undefined)}
+                onClick={() => void speak(card.word, language, rate).catch(() => undefined)}
                 aria-label="聽發音"
                 className="rounded-full bg-teal-50 px-3 text-xl"
               >
@@ -292,7 +300,7 @@ export default function VocabSession() {
                 <p className="leading-relaxed">{card.example}</p>
                 {card.example_zh && <p className="mt-1 text-sm text-slate-500">{card.example_zh}</p>}
                 <button
-                  onClick={() => void speak(card.example, language, 0.95).catch(() => undefined)}
+                  onClick={() => void speak(card.example, language, rate).catch(() => undefined)}
                   className="mt-2 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-teal-700"
                 >
                   🔊 聽例句
@@ -328,7 +336,7 @@ export default function VocabSession() {
               )}
               {mode === 'listen' && (
                 <button
-                  onClick={() => void speak(card.word, language, 0.9).catch(() => undefined)}
+                  onClick={() => void speak(card.word, language, rate).catch(() => undefined)}
                   className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-teal-50 text-4xl active:scale-95"
                   aria-label="再聽一次"
                 >

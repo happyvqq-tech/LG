@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
 import TaskNav from '../components/TaskNav'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
 
 export default function Listening() {
   const navigate = useNavigate()
@@ -13,7 +15,7 @@ export default function Listening() {
   )
   const lang = task?.language ?? '英文'
 
-  const [rate, setRate] = useState(1)
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
   const [sentenceMode, setSentenceMode] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [index, setIndex] = useState(0)
@@ -133,19 +135,23 @@ export default function Listening() {
           </div>
         )}
 
-        <div className="mt-6 flex gap-2">
-          <button
-            onClick={() => setRate(rate === 1 ? 0.75 : 1)}
-            className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600"
-          >
-            語速 {rate === 1 ? '1x' : '0.75x'}
-          </button>
+        <div className="mt-6 w-full">
+          <p className="text-sm font-semibold text-slate-600">語速</p>
+          <div className="mt-1.5">
+            <SpeedPicker
+              level={speedLevel}
+              onChange={(lv) => {
+                stop() // 換速度就停下重播，免得聽到一半速度跳掉
+                setSpeedLevel(lv)
+              }}
+            />
+          </div>
           <button
             onClick={() => {
               stop()
               setSentenceMode(!sentenceMode)
             }}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+            className={`mt-3 rounded-full px-4 py-2 text-sm font-semibold ${
               sentenceMode ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
             }`}
           >

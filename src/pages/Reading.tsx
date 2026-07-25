@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, stopSpeaking } from '../lib/speech'
 import TaskNav from '../components/TaskNav'
+import SpeedPicker from '../components/SpeedPicker'
+import { useSpeechRate } from '../lib/useSpeechRate'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -40,6 +42,7 @@ export default function Reading() {
   const navigate = useNavigate()
   const { task, loading } = useActiveTask()
   const [speakingChunk, setSpeakingChunk] = useState<number | null>(null)
+  const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
 
@@ -50,7 +53,7 @@ export default function Reading() {
     stopSpeaking()
     setSpeakingChunk(i)
     try {
-      await speak(text, lang, 1)
+      await speak(text, lang, rate)
     } catch {
       // 播放失敗不阻擋閱讀
     } finally {
@@ -70,7 +73,12 @@ export default function Reading() {
         <HighlightedScript script={listening_script} chunkTexts={chunks.map((c) => c.text)} />
       </section>
 
-      <h2 className="mt-6 text-lg font-bold text-slate-700">語塊（點卡片聽發音）</h2>
+      <div className="mt-6 flex items-center gap-2">
+        <span className="shrink-0 text-sm font-semibold text-slate-600">語速</span>
+        <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
+      </div>
+
+      <h2 className="mt-4 text-lg font-bold text-slate-700">語塊（點卡片聽發音）</h2>
       <div className="mt-3 grid gap-3">
         {chunks.map((c, i) => (
           <button
