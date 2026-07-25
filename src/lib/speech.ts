@@ -7,6 +7,7 @@ export const LANG_CODE: Record<Language, string> = {
   英文: 'en-US',
   日文: 'ja-JP',
   台語: 'zh-TW', // 台語模組（第三階段）以人工音檔為主，TTS 僅作備援
+  古文: 'zh-TW', // 文言誦讀：用國語語音，重點在停頓與節奏
 }
 
 // ---------------- TTS ----------------

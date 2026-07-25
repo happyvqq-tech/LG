@@ -92,6 +92,29 @@ export function punctuationComment(score: PunctuationScore): string {
   return '先別急著斷，回去聽一次朗讀，感受語氣停頓在哪裡'
 }
 
+/**
+ * 從段落取一段長度適中的原文來練句讀。
+ * 長段落（本書最長的一段有四百多個斷點）整段做完會累垮人，
+ * 故切到約 maxChars 字，且一定切在標點處，不會斷在句子中間。
+ */
+export function takeSegment(punctuated: string, maxChars = 80): string {
+  if (punctuated.length <= maxChars) return punctuated
+
+  let lastBreak = -1
+  let plainCount = 0
+  for (let i = 0; i < punctuated.length; i++) {
+    const ch = punctuated[i]
+    if (BREAK_MARKS.has(ch)) {
+      lastBreak = i
+      if (plainCount >= maxChars) return punctuated.slice(0, i + 1)
+      continue
+    }
+    if (!SKIP_MARKS.has(ch)) plainCount++
+  }
+  // 整段都沒有夠靠後的標點時，退回最後一個標點處
+  return lastBreak > 0 ? punctuated.slice(0, lastBreak + 1) : punctuated
+}
+
 /** 把原文依斷句位置切成短句，供檢討時逐句對照 */
 export function splitByBreaks(plain: string, breaks: number[]): string[] {
   const sorted = [...new Set(breaks)].sort((a, b) => a - b)

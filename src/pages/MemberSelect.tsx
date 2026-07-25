@@ -18,7 +18,7 @@ import {
   type Scenario,
 } from '../lib/types'
 
-const ALL_LANGUAGES: Language[] = ['英文', '日文', '台語']
+const ALL_LANGUAGES: Language[] = ['英文', '日文', '台語', '古文']
 
 function planSummary(plan: DailyPlan | null): string | null {
   if (!plan || plan.days.length === 0) return null

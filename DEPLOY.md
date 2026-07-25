@@ -13,7 +13,11 @@
    - 貼上 `supabase/migration-002.sql` 全文 → Run（成員照片、每日學習計畫欄位）
    - 貼上 `supabase/migration-003.sql` 全文 → Run（單字庫 vocab_cards 表）
    - 貼上 `supabase/migration-004.sql` 全文 → Run（每日測驗成績 vocab_quizzes 表）
+   - 貼上 `supabase/migration-005.sql` 全文 → Run（古文進度 classical_progress 表）
      ⚠️ 已建過資料庫的人這幾段也要跑，否則會出現「column / table does not exist」
+
+> 古文原文（《古文觀止》222 篇）不進資料庫，隨程式動態載入，第一次進古文頁才下載約 190KB，
+> 之後由 Service Worker 快取，離線可讀。
 3. 到 **Project Settings → API** 抄下兩個值：
    - `Project URL`（形如 `https://xxxx.supabase.co`）→ 之後填 `VITE_SUPABASE_URL`
    - `anon public` key → 之後填 `VITE_SUPABASE_ANON_KEY`

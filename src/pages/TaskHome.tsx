@@ -248,6 +248,20 @@ export default function TaskHome() {
           <span className="text-slate-300">→</span>
         </Link>
 
+        <Link
+          to="/classical"
+          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">📜</span>
+            <span className="text-left">
+              <span className="block font-bold">古文</span>
+              <span className="block text-sm text-slate-500">古文觀止 222 篇・句讀、字詞、翻譯</span>
+            </span>
+          </span>
+          <span className="text-slate-300">→</span>
+        </Link>
+
         <button
           onClick={() => setShowErrorBank(true)}
           className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"

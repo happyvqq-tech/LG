@@ -1,6 +1,6 @@
 // 對應 supabase/schema.sql 的資料型別與任務 JSON 結構
 
-export type Language = '英文' | '日文' | '台語'
+export type Language = '英文' | '日文' | '台語' | '古文'
 export type Level = 'A2' | 'B1' | 'B2' | 'C1'
 export type Scenario = '校園' | '日常' | '旅遊' | '職場' | '新聞時事' | '科技'
 
@@ -49,6 +49,8 @@ export interface Profile {
   avatar_url: string | null
   daily_plan: DailyPlan | null
   vocab_pref: VocabPref | null
+  /** 古文程度：入門／基礎／進階／高階（見 data/classicalIndex.ts） */
+  classical_level: string | null
   created_at: string
 }
 
@@ -168,6 +170,22 @@ export interface VocabCard {
   lapses: number
   due_date: string
   created_at: string
+}
+
+/** 古文學習進度（對應 classical_progress 表） */
+export interface ClassicalProgress {
+  id: string
+  profile_id: string
+  text_id: string
+  /** 已讀到第幾段（0-based） */
+  para_index: number
+  /** 句讀最佳正確率 0-1 */
+  punctuation_best: number
+  /** 翻譯最佳分數 0-100 */
+  translation_best: number
+  status: 'reading' | 'done'
+  created_at: string
+  updated_at: string
 }
 
 /** 每日測驗的單題結果（存進 vocab_quizzes.details） */

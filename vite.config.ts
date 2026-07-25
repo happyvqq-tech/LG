@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         name: '家庭語言學習',
         short_name: '語言學習',
-        description: '家庭自用語言學習 App：英文、日文、台語',
+        description: '家庭自用語言學習 App：英文、日文、台語、古文',
         lang: 'zh-TW',
         theme_color: '#0f766e',
         background_color: '#f8fafc',
@@ -29,6 +29,20 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+        // 古文原文與夾註各約 190KB（gzip），不預先下載，
+        // 改成「第一次進古文才抓，抓過就永久離線可用」
+        globIgnores: ['**/classicalTexts-*.js', '**/classicalNotes-*.js'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/classical(Texts|Notes)-[\w-]+\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'classical-texts',
+              expiration: { maxEntries: 8 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

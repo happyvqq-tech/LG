@@ -12,6 +12,8 @@ import VocabHome from './pages/VocabHome'
 import VocabSession from './pages/VocabSession'
 import VocabList from './pages/VocabList'
 import VocabQuiz from './pages/VocabQuiz'
+import ClassicalHome from './pages/ClassicalHome'
+import ClassicalRead from './pages/ClassicalRead'
 
 function guarded(page: React.ReactNode) {
   return <RequireProfile>{page}</RequireProfile>
@@ -32,6 +34,8 @@ export default function App() {
       <Route path="/vocab/session" element={guarded(<VocabSession />)} />
       <Route path="/vocab/list" element={guarded(<VocabList />)} />
       <Route path="/vocab/quiz" element={guarded(<VocabQuiz />)} />
+      <Route path="/classical" element={guarded(<ClassicalHome />)} />
+      <Route path="/classical/:textId" element={guarded(<ClassicalRead />)} />
     </Routes>
   )
 }
