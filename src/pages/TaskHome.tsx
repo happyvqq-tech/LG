@@ -94,10 +94,10 @@ export default function TaskHome() {
     }
   }
 
-  function startTask() {
+  function goToSkill(path: string) {
     if (!task) return
     setActiveTaskId(task.id)
-    navigate('/listening')
+    navigate(path)
   }
 
   if (!profile) return null
@@ -147,12 +147,28 @@ export default function TaskHome() {
             </p>
             <h3 className="mt-2 text-2xl font-bold">{task.task_json.scenario_title}</h3>
             <p className="mt-2 text-slate-600">{task.task_json.scenario_desc}</p>
-            <p className="mt-4 text-sm text-slate-400">流程：聽 → 讀 → 說 → 寫（約 8-15 分鐘）</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {([
+                { label: '聽力', icon: '🎧', path: '/listening' },
+                { label: '閱讀', icon: '📖', path: '/reading' },
+                { label: '口說', icon: '🗣️', path: '/speaking' },
+                { label: '寫作', icon: '✍️', path: '/writing' },
+              ] as const).map((s) => (
+                <button
+                  key={s.path}
+                  onClick={() => goToSkill(s.path)}
+                  className="flex items-center gap-3 rounded-xl bg-teal-50 px-4 py-4 text-left font-semibold text-teal-800 shadow-sm transition active:scale-95 active:bg-teal-100"
+                >
+                  <span className="text-2xl">{s.icon}</span>
+                  {s.label}
+                </button>
+              ))}
+            </div>
             <button
-              onClick={startTask}
-              className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
+              onClick={() => goToSkill('/listening')}
+              className="mt-3 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
             >
-              開始
+              從頭開始（聽→讀→說→寫）
             </button>
           </div>
         )}
