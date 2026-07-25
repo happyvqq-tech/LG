@@ -8,6 +8,9 @@ import Speaking from './pages/Speaking'
 import Writing from './pages/Writing'
 import Feedback from './pages/Feedback'
 import GrammarDrill from './pages/GrammarDrill'
+import VocabHome from './pages/VocabHome'
+import VocabSession from './pages/VocabSession'
+import VocabList from './pages/VocabList'
 
 function guarded(page: React.ReactNode) {
   return <RequireProfile>{page}</RequireProfile>
@@ -24,6 +27,9 @@ export default function App() {
       <Route path="/writing" element={guarded(<Writing />)} />
       <Route path="/feedback" element={guarded(<Feedback />)} />
       <Route path="/grammar-drill" element={guarded(<GrammarDrill />)} />
+      <Route path="/vocab" element={guarded(<VocabHome />)} />
+      <Route path="/vocab/session" element={guarded(<VocabSession />)} />
+      <Route path="/vocab/list" element={guarded(<VocabList />)} />
     </Routes>
   )
 }

@@ -47,7 +47,8 @@ export default function MemberSelect() {
     if (error) {
       setLoadError(`讀取成員失敗：${error.message}`)
     } else {
-      setProfiles((data ?? []) as Profile[])
+      // 防禦：回應非陣列時不讓整頁白屏
+      setProfiles(Array.isArray(data) ? (data as Profile[]) : [])
     }
     setLoading(false)
   }

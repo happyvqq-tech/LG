@@ -10,7 +10,11 @@ import {
   type ReviewPracticeResult,
 } from '../lib/prompts/reviewPractice'
 import PracticeQuiz from '../components/PracticeQuiz'
+import { harvestFromTask } from '../lib/vocabService'
 import type { DrillQuestion } from '../lib/types'
+
+/** 用字類錯誤才值得進單字庫（時態、冠詞這類是文法問題，歸錯誤庫管） */
+const VOCAB_ERROR_TYPES = ['用字', '中式表達']
 
 function StatCard({ value, label, tone = 'slate' }: { value: string; label: string; tone?: string }) {
   const tones: Record<string, string> = {
@@ -87,6 +91,21 @@ export default function Feedback() {
     try {
       // 推進錯誤狀態機（未再犯 +1／驗證通過 resolved／再犯退回）
       await processTaskCompletion(task)
+
+      // 本次語塊與用字錯誤自動進單字庫，之後由間隔重複接手
+      const harvest = [
+        ...task.task_json.chunks.map((c) => ({
+          word: c.text,
+          meaning_zh: c.zh,
+          example: c.usage,
+        })),
+        ...(task.task_json.grading?.errors ?? [])
+          .filter((e) => VOCAB_ERROR_TYPES.includes(e.error_type))
+          .map((e) => ({ word: e.corrected, meaning_zh: e.rule_note, example: '' })),
+      ]
+      // 單字入庫失敗不該擋住任務完成
+      await harvestFromTask(task.profile_id, task.language, harvest).catch(() => 0)
+
       await completeTask(task.id)
       clearActiveTaskId()
       navigate('/home')

@@ -10,6 +10,7 @@ create table if not exists profiles (
   scenario_pool text[] not null default '{日常}',          -- 校園/日常/旅遊/職場/新聞時事/科技
   avatar_url    text,                                      -- 成員照片 data URL
   daily_plan    jsonb,                                     -- {time, minutes, days}
+  vocab_pref    jsonb,                                     -- {exam, exam_level, daily_new}
   created_at    timestamptz not null default now()
 );
 
@@ -54,6 +55,34 @@ create table if not exists grammar_points (
 
 create index if not exists idx_grammar_points_lang_rotation on grammar_points (language, in_rotation);
 
+-- ---------- vocab_cards：單字卡（間隔重複） ----------
+create table if not exists vocab_cards (
+  id            uuid primary key default gen_random_uuid(),
+  profile_id    uuid not null references profiles(id) on delete cascade,
+  language      text not null,
+  word          text not null,
+  reading       text not null default '',
+  meaning_zh    text not null default '',
+  pos           text not null default '',
+  example       text not null default '',
+  example_zh    text not null default '',
+  collocations  text[] not null default '{}',
+  exam          text not null default '',
+  exam_level    text not null default '',
+  source        text not null default 'list' check (source in ('list', 'ai', 'task')),
+  stage         int  not null default 0,
+  ease          real not null default 2.5,
+  interval_days int  not null default 0,
+  repetitions   int  not null default 0,
+  lapses        int  not null default 0,
+  due_date      date not null default current_date,
+  created_at    timestamptz not null default now(),
+  unique (profile_id, language, word)
+);
+
+create index if not exists idx_vocab_due on vocab_cards (profile_id, language, due_date);
+create index if not exists idx_vocab_stage on vocab_cards (profile_id, language, stage);
+
 -- ---------- taiwanese_scripts：台語腳本 ----------
 create table if not exists taiwanese_scripts (
   id         uuid primary key default gen_random_uuid(),
@@ -68,16 +97,19 @@ alter table profiles          enable row level security;
 alter table tasks             enable row level security;
 alter table errors            enable row level security;
 alter table grammar_points    enable row level security;
+alter table vocab_cards       enable row level security;
 alter table taiwanese_scripts enable row level security;
 
 drop policy if exists "anon full access profiles"          on profiles;
 drop policy if exists "anon full access tasks"             on tasks;
 drop policy if exists "anon full access errors"            on errors;
 drop policy if exists "anon full access grammar_points"    on grammar_points;
+drop policy if exists "anon full access vocab_cards"       on vocab_cards;
 drop policy if exists "anon full access taiwanese_scripts" on taiwanese_scripts;
 
 create policy "anon full access profiles"          on profiles          for all to anon using (true) with check (true);
 create policy "anon full access tasks"             on tasks             for all to anon using (true) with check (true);
 create policy "anon full access errors"            on errors            for all to anon using (true) with check (true);
 create policy "anon full access grammar_points"    on grammar_points    for all to anon using (true) with check (true);
+create policy "anon full access vocab_cards"       on vocab_cards       for all to anon using (true) with check (true);
 create policy "anon full access taiwanese_scripts" on taiwanese_scripts for all to anon using (true) with check (true);

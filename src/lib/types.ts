@@ -48,6 +48,7 @@ export interface Profile {
   /** 成員照片（壓縮後的 data URL；未設定為 null） */
   avatar_url: string | null
   daily_plan: DailyPlan | null
+  vocab_pref: VocabPref | null
   created_at: string
 }
 
@@ -141,6 +142,43 @@ export interface GraderResult {
   errors: GraderError[]
   praise: string
 }
+
+/** 單字卡（對應 vocab_cards 表） */
+export interface VocabCard {
+  id: string
+  profile_id: string
+  language: Language
+  word: string
+  /** 英文音標 / 日文假名 */
+  reading: string
+  meaning_zh: string
+  pos: string
+  example: string
+  example_zh: string
+  collocations: string[]
+  exam: string
+  exam_level: string
+  /** list=內建字表 ai=AI 補充 task=任務生字 */
+  source: 'list' | 'ai' | 'task'
+  // SRS 狀態
+  stage: number
+  ease: number
+  interval_days: number
+  repetitions: number
+  lapses: number
+  due_date: string
+  created_at: string
+}
+
+/** 成員的單字學習設定（存 profiles.vocab_pref） */
+export interface VocabPref {
+  exam: string
+  exam_level: string
+  /** 每日新字量 */
+  daily_new: number
+}
+
+export const DEFAULT_VOCAB_PREF: VocabPref = { exam: 'TOEIC', exam_level: '650', daily_new: 10 }
 
 export interface TaiwaneseScriptLine {
   hanji: string

@@ -7,6 +7,7 @@ import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import { taskGeneratorSystemPrompt, isTaskJson } from '../lib/prompts/taskGenerator'
 import { createTask, getTodayPendingTask, setActiveTaskId } from '../lib/taskService'
 import { downloadIcs } from '../lib/ics'
+import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
 import { LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson } from '../lib/types'
 
@@ -78,12 +79,16 @@ export default function TaskHome() {
       // 3. 情境隨機取自成員情境池
       const scenario = pickRandom(profile.scenario_pool.length > 0 ? profile.scenario_pool : ['日常'], 1)[0]
 
+      // 4. 單字庫中複習中的字，讓任務自然帶到（學了馬上用得到）
+      const vocabWords = await getWordsForTask(profile.id, language)
+
       const system = taskGeneratorSystemPrompt({
         language,
         level: profile.level,
         scenario,
         grammarPoints,
         pendingErrors: (errData ?? []) as ErrorRecord[],
+        vocabWords,
       })
       const taskJson = await callClaudeJSON<TaskJson>(
         { module: 'taskGenerator', system, messages: [{ role: 'user', content: '請生成今日任務' }] },
@@ -228,10 +233,24 @@ export default function TaskHome() {
         )}
       </section>
 
-      <section className="mt-6">
+      <section className="mt-6 grid gap-3">
+        <Link
+          to="/vocab"
+          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">🗂️</span>
+            <span className="text-left">
+              <span className="block font-bold">單字庫</span>
+              <span className="block text-sm text-slate-500">多益・托福・雅思・劍橋・JLPT 分級</span>
+            </span>
+          </span>
+          <span className="text-slate-300">→</span>
+        </Link>
+
         <button
           onClick={() => setShowErrorBank(true)}
-          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow active:scale-[0.98]"
+          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
         >
           <span className="flex items-center gap-3">
             <span className="text-2xl">📚</span>

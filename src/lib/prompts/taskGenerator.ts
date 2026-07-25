@@ -8,6 +8,8 @@ export interface TaskGeneratorInput {
   scenario: string
   grammarPoints: GrammarPoint[]
   pendingErrors: ErrorRecord[]
+  /** 單字庫中學習中的字，讓任務自然用到（學了馬上碰到） */
+  vocabWords?: string[]
 }
 
 export function taskGeneratorSystemPrompt(input: TaskGeneratorInput): string {
@@ -21,6 +23,9 @@ export function taskGeneratorSystemPrompt(input: TaskGeneratorInput): string {
           .join('；')
       : '無'
 
+  const vocabList =
+    input.vocabWords && input.vocabWords.length > 0 ? input.vocabWords.join('、') : '無'
+
   return `你是語言學習任務設計師。根據以下輸入生成一個 8-15 分鐘的任務式學習循環。
 
 輸入變數：
@@ -29,6 +34,7 @@ export function taskGeneratorSystemPrompt(input: TaskGeneratorInput): string {
 - 情境類別：${input.scenario}
 - 本週文法點：${grammarList}
 - 待驗證錯誤：${errorList}
+- 複習中的單字：${vocabList}
 
 硬性要求：
 0. 程度為 A2（初級）時：聽力稿縮短為 100-150 字、句子放短、只用常見高頻字，語塊改為 4-6 個；B1 以上依下列原則
@@ -37,6 +43,7 @@ export function taskGeneratorSystemPrompt(input: TaskGeneratorInput): string {
 3. 語塊（chunks）給 5-8 個，是可整段套用的片語，不是單字
 4. 寫作題必須與情境直接相關，30-80 字即可完成
 5. 日文任務需標註丁寧體/普通體要求
+6. 若有「複習中的單字」，聽力稿要自然帶入其中 2-4 個（用不上的不要硬塞，也不要另外標註）
 
 只輸出 JSON，不加任何前言、不用 markdown 圍欄：
 {
