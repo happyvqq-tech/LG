@@ -2,10 +2,16 @@ name = "lglearning-worker"
 main = "src/index.ts"
 compatibility_date = "2026-01-01"
 
+# 保留本檔沒宣告的變數與 secret。
+# 預設行為會把 Dashboard 上設定、但這裡沒列出的變數全部刪掉——
+# 這會讓每次 Cloudflare 自動重建都洗掉 ANTHROPIC_API_KEY。
+keep_vars = true
+
 # 正式環境的 CORS 白名單（GitHub Pages 網址，結尾不加斜線）
 # 部署前改成你的 Pages 網址，例如 https://happyvqq-tech.github.io
 [vars]
 ALLOWED_ORIGIN = "https://happyvqq-tech.github.io"
 
-# API key 不放這裡！用 secret：
+# API key 不放這裡！用 secret（擇一）：
 #   wrangler secret put ANTHROPIC_API_KEY
+#   或 Dashboard → Worker → Settings → Variables and secrets → 型別選 Secret
