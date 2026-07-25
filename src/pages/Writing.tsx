@@ -7,6 +7,7 @@ import { graderSystemPrompt, graderUserMessage, isGraderResult } from '../lib/pr
 import { updateTaskJson } from '../lib/taskService'
 import { diffTokens } from '../lib/textDiff'
 import DrillModal from '../components/DrillModal'
+import TaskNav from '../components/TaskNav'
 import type { GraderError, GraderResult } from '../lib/types'
 
 function countUnits(text: string, language: string): number {
@@ -78,7 +79,8 @@ export default function Writing() {
 
   return (
     <main className="mx-auto max-w-xl p-6 pb-12">
-      <header className="pt-2">
+      <TaskNav current="writing" />
+      <header>
         <p className="text-sm font-semibold text-teal-700">第四關・寫作</p>
         <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
       </header>

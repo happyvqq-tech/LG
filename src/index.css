@@ -5,7 +5,10 @@ html {
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+  @apply text-slate-800 antialiased;
+  background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 22%, #f8fafc 100%);
+  background-attachment: fixed;
+  min-height: 100dvh;
   font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
 }
 

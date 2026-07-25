@@ -31,6 +31,7 @@ export function taskGeneratorSystemPrompt(input: TaskGeneratorInput): string {
 - 待驗證錯誤：${errorList}
 
 硬性要求：
+0. 程度為 A2（初級）時：聽力稿縮短為 100-150 字、句子放短、只用常見高頻字，語塊改為 4-6 個；B1 以上依下列原則
 1. 聽力稿 150-250 字，口語自然，必須自然融入指定文法點至少 3 次
 2. 若有待驗證錯誤，必須在對話任務或寫作題中刻意設計會用到該句型的情境（不明說）
 3. 語塊（chunks）給 5-8 個，是可整段套用的片語，不是單字

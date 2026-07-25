@@ -1,11 +1,43 @@
 // 對應 supabase/schema.sql 的資料型別與任務 JSON 結構
 
 export type Language = '英文' | '日文' | '台語'
-export type Level = 'B1' | 'B2' | 'C1'
+export type Level = 'A2' | 'B1' | 'B2' | 'C1'
 export type Scenario = '校園' | '日常' | '旅遊' | '職場' | '新聞時事' | '科技'
 
 export const ALL_SCENARIOS: Scenario[] = ['校園', '日常', '旅遊', '職場', '新聞時事', '科技']
-export const ALL_LEVELS: Level[] = ['B1', 'B2', 'C1']
+export const ALL_LEVELS: Level[] = ['A2', 'B1', 'B2', 'C1']
+
+/** 各程度的白話說明（選擇程度時以浮動提示呈現） */
+export const LEVEL_INFO: Record<Level, { label: string; desc: string }> = {
+  A2: {
+    label: '初級',
+    desc: '能應付簡單日常需求：點餐、問路、自我介紹。聽得懂放慢語速的短句，會用基本時態造句。',
+  },
+  B1: {
+    label: '中級',
+    desc: '能聽懂日常對話的主要內容，旅遊購物自己來沒問題。文法還是會錯，但溝通不成問題。',
+  },
+  B2: {
+    label: '中高級',
+    desc: '能和母語者流暢對話不太卡，看得懂新聞文章，能寫出結構完整、論點清楚的短文。',
+  },
+  C1: {
+    label: '高級',
+    desc: '能理解長篇複雜文章與言外之意，表達流利自然、用字精準，接近母語者水平。',
+  },
+}
+
+/** 每日學習計畫（可匯出 .ics 加進手機行事曆提醒） */
+export interface DailyPlan {
+  /** 24 小時制 'HH:MM' */
+  time: string
+  /** 每日目標分鐘數 */
+  minutes: number
+  /** 練習日：0=週日 … 6=週六 */
+  days: number[]
+}
+
+export const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'] as const
 
 export interface Profile {
   id: string
@@ -13,6 +45,9 @@ export interface Profile {
   languages: Language[]
   level: Level
   scenario_pool: Scenario[]
+  /** 成員照片（壓縮後的 data URL；未設定為 null） */
+  avatar_url: string | null
+  daily_plan: DailyPlan | null
   created_at: string
 }
 

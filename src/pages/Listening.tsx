@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
+import TaskNav from '../components/TaskNav'
 
 export default function Listening() {
   const navigate = useNavigate()
@@ -66,7 +67,8 @@ export default function Listening() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6 pb-10">
-      <header className="pt-2">
+      <TaskNav current="listening" />
+      <header>
         <p className="text-sm font-semibold text-teal-700">第一關・聽力</p>
         <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
         <p className="mt-1 text-slate-500">{task.task_json.scenario_desc}</p>

@@ -6,7 +6,9 @@ import { useProfile } from '../lib/profileContext'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import { taskGeneratorSystemPrompt, isTaskJson } from '../lib/prompts/taskGenerator'
 import { createTask, getTodayPendingTask, setActiveTaskId } from '../lib/taskService'
-import type { ErrorRecord, GrammarPoint, Language, Task, TaskJson } from '../lib/types'
+import { downloadIcs } from '../lib/ics'
+import Avatar from '../components/Avatar'
+import { LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson } from '../lib/types'
 
 function pickRandom<T>(list: T[], count: number): T[] {
   const copy = [...list]
@@ -19,7 +21,7 @@ function pickRandom<T>(list: T[], count: number): T[] {
 
 export default function TaskHome() {
   const navigate = useNavigate()
-  const { profile } = useProfile()
+  const { profile, refreshProfile } = useProfile()
   const learnable = useMemo(
     () => (profile?.languages ?? []).filter((l): l is '英文' | '日文' => l === '英文' || l === '日文'),
     [profile],
@@ -30,6 +32,12 @@ export default function TaskHome() {
   const [generating, setGenerating] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [showErrorBank, setShowErrorBank] = useState(false)
+
+  // 進頁面時同步一次成員資料（其他裝置改過名稱/照片/計畫時跟上）
+  useEffect(() => {
+    void refreshProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!profile) return
@@ -106,18 +114,38 @@ export default function TaskHome() {
     <main className="mx-auto max-w-xl p-6 pb-24">
       <header className="flex items-center justify-between pt-2">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-600 text-lg font-bold text-white">
-            {profile.name.slice(0, 1)}
-          </span>
+          <Avatar profile={profile} size="sm" />
           <div>
             <p className="font-bold">{profile.name}</p>
-            <p className="text-sm text-slate-500">{profile.level}</p>
+            <p className="text-sm text-slate-500">
+              {profile.level} {LEVEL_INFO[profile.level]?.label ?? ''}
+            </p>
           </div>
         </div>
         <Link to="/" className="rounded-full px-4 py-2 text-sm text-slate-500 active:bg-slate-100">
           換人
         </Link>
       </header>
+
+      {profile.daily_plan && profile.daily_plan.days.length > 0 && (
+        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <span className="text-xl">⏰</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-slate-700">
+              今日計畫 {profile.daily_plan.time}・{profile.daily_plan.minutes} 分鐘
+            </p>
+            <p className="text-xs text-slate-400">
+              練習日：{profile.daily_plan.days.map((d) => WEEKDAY_LABELS[d]).join('、')}
+            </p>
+          </div>
+          <button
+            onClick={() => downloadIcs(profile, profile.daily_plan!)}
+            className="rounded-xl bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700"
+          >
+            📅 加入行事曆
+          </button>
+        </div>
+      )}
 
       {learnable.length > 1 && (
         <div className="mt-5 flex gap-2">

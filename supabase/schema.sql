@@ -6,8 +6,10 @@ create table if not exists profiles (
   id            uuid primary key default gen_random_uuid(),
   name          text not null,
   languages     text[] not null default '{英文}',          -- 英文 / 日文 / 台語
-  level         text not null default 'B1',                -- B1 / B2 / C1
+  level         text not null default 'B1',                -- A2 / B1 / B2 / C1
   scenario_pool text[] not null default '{日常}',          -- 校園/日常/旅遊/職場/新聞時事/科技
+  avatar_url    text,                                      -- 成員照片 data URL
+  daily_plan    jsonb,                                     -- {time, minutes, days}
   created_at    timestamptz not null default now()
 );
 

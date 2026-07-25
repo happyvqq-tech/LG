@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, stopSpeaking } from '../lib/speech'
+import TaskNav from '../components/TaskNav'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -59,7 +60,8 @@ export default function Reading() {
 
   return (
     <main className="mx-auto max-w-xl p-6 pb-10">
-      <header className="pt-2">
+      <TaskNav current="reading" />
+      <header>
         <p className="text-sm font-semibold text-teal-700">第二關・閱讀</p>
         <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
       </header>

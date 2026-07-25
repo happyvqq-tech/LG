@@ -10,6 +10,8 @@
 2. 進入 **SQL Editor**：
    - 貼上 `supabase/schema.sql` 全文 → Run（應顯示 Success）
    - 貼上 `supabase/seed.sql` 全文 → Run（寫入 2 位示範成員與 90 個文法點）
+   - 貼上 `supabase/migration-002.sql` 全文 → Run（成員照片、每日學習計畫欄位）
+     ⚠️ 已建過資料庫的人也要跑這一段，否則新增/編輯成員會出現「column does not exist」
 3. 到 **Project Settings → API** 抄下兩個值：
    - `Project URL`（形如 `https://xxxx.supabase.co`）→ 之後填 `VITE_SUPABASE_URL`
    - `anon public` key → 之後填 `VITE_SUPABASE_ANON_KEY`

@@ -11,6 +11,7 @@ import {
 } from '../lib/prompts/dialogPartner'
 import { updateTaskJson } from '../lib/taskService'
 import { HoldToTalkRecognizer, speak, stopSpeaking, sttSupported } from '../lib/speech'
+import TaskNav from '../components/TaskNav'
 import type { ChatMessage, Task } from '../lib/types'
 
 export default function Speaking() {
@@ -137,7 +138,8 @@ export default function Speaking() {
 
   return (
     <main className="mx-auto flex h-dvh max-w-xl flex-col p-4">
-      <header className="px-2 pt-2">
+      <TaskNav current="speaking" />
+      <header className="px-2">
         <p className="text-sm font-semibold text-teal-700">第三關・口說</p>
         <h1 className="text-xl font-bold">{task.task_json.scenario_title}</h1>
         <p className="mt-1 text-sm text-slate-500">目標：{task.task_json.speaking_goal}</p>
