@@ -12,7 +12,8 @@
    - 貼上 `supabase/seed.sql` 全文 → Run（寫入 2 位示範成員與 90 個文法點）
    - 貼上 `supabase/migration-002.sql` 全文 → Run（成員照片、每日學習計畫欄位）
    - 貼上 `supabase/migration-003.sql` 全文 → Run（單字庫 vocab_cards 表）
-     ⚠️ 已建過資料庫的人這兩段也要跑，否則會出現「column / table does not exist」
+   - 貼上 `supabase/migration-004.sql` 全文 → Run（每日測驗成績 vocab_quizzes 表）
+     ⚠️ 已建過資料庫的人這幾段也要跑，否則會出現「column / table does not exist」
 3. 到 **Project Settings → API** 抄下兩個值：
    - `Project URL`（形如 `https://xxxx.supabase.co`）→ 之後填 `VITE_SUPABASE_URL`
    - `anon public` key → 之後填 `VITE_SUPABASE_ANON_KEY`

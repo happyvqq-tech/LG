@@ -170,6 +170,26 @@ export interface VocabCard {
   created_at: string
 }
 
+/** 每日測驗的單題結果（存進 vocab_quizzes.details） */
+export interface QuizDetail {
+  word: string
+  input: string
+  verdict: 'correct' | 'inflected' | 'close' | 'wrong'
+  used_hint: boolean
+}
+
+/** 一次測驗的成績（對應 vocab_quizzes 表） */
+export interface QuizRecord {
+  id: string
+  profile_id: string
+  language: Language
+  quiz_date: string
+  score: number
+  total: number
+  details: QuizDetail[]
+  created_at: string
+}
+
 /** 成員的單字學習設定（存 profiles.vocab_pref） */
 export interface VocabPref {
   exam: string

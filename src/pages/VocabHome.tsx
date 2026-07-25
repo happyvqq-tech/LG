@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../lib/profileContext'
 import { getVocabStats, type VocabStats } from '../lib/vocabService'
+import { getQuizHistory, takenToday } from '../lib/quizService'
+import QuizTrend from '../components/QuizTrend'
+import type { QuizRecord } from '../lib/types'
 import { EXAM_OPTIONS, examLanguage, type ExamSystem } from '../data/vocabLists'
 import { DEFAULT_VOCAB_PREF, type Language, type VocabPref } from '../lib/types'
 
@@ -12,6 +15,7 @@ export default function VocabHome() {
   const navigate = useNavigate()
   const { profile, refreshProfile } = useProfile()
   const [stats, setStats] = useState<VocabStats | null>(null)
+  const [history, setHistory] = useState<QuizRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const [showSettings, setShowSettings] = useState(false)
@@ -24,7 +28,13 @@ export default function VocabHome() {
     setLoading(true)
     setErrorMsg('')
     try {
-      setStats(await getVocabStats(profile.id, language))
+      const [s, h] = await Promise.all([
+        getVocabStats(profile.id, language),
+        // 測驗紀錄讀不到不該擋住主畫面（例如還沒跑 migration-004）
+        getQuizHistory(profile.id, language).catch(() => [] as QuizRecord[]),
+      ])
+      setStats(s)
+      setHistory(h)
     } catch (e: unknown) {
       setErrorMsg(`讀取單字進度失敗：${String((e as Error).message)}`)
     } finally {
@@ -39,6 +49,7 @@ export default function VocabHome() {
   if (!profile) return null
 
   const canStart = (stats?.due ?? 0) > 0 || pref.daily_new > 0
+  const todayResult = takenToday(history)
 
   return (
     <main className="mx-auto max-w-xl p-6 pb-24">
@@ -126,6 +137,36 @@ export default function VocabHome() {
                   ：每天 {pref.daily_new} 個新字 + 到期複習，約 8-12 分鐘，天天做比一次狂背有效得多
                 </li>
               </ul>
+            </div>
+          )}
+
+          {/* 每日測驗 */}
+          <button
+            onClick={() => navigate('/vocab/quiz')}
+            className="mt-4 flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">📝</span>
+              <span className="text-left">
+                <span className="block font-bold">
+                  每日測驗
+                  {todayResult && (
+                    <span className="ml-2 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
+                      今天 {todayResult.score}/{todayResult.total}
+                    </span>
+                  )}
+                </span>
+                <span className="block text-sm text-slate-500">
+                  {todayResult ? '已完成，可以再測一次（不覆蓋紀錄）' : '全新句子填空，檢測是不是真的會用'}
+                </span>
+              </span>
+            </span>
+            <span className="text-slate-300">→</span>
+          </button>
+
+          {history.length > 0 && (
+            <div className="mt-4">
+              <QuizTrend history={history} />
             </div>
           )}
 

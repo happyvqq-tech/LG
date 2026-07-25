@@ -83,6 +83,20 @@ create table if not exists vocab_cards (
 create index if not exists idx_vocab_due on vocab_cards (profile_id, language, due_date);
 create index if not exists idx_vocab_stage on vocab_cards (profile_id, language, stage);
 
+-- ---------- vocab_quizzes：每日測驗成績 ----------
+create table if not exists vocab_quizzes (
+  id         uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references profiles(id) on delete cascade,
+  language   text not null,
+  quiz_date  date not null default current_date,
+  score      real not null default 0,
+  total      int  not null default 0,
+  details    jsonb not null default '[]',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_quiz_profile_date on vocab_quizzes (profile_id, language, quiz_date desc);
+
 -- ---------- taiwanese_scripts：台語腳本 ----------
 create table if not exists taiwanese_scripts (
   id         uuid primary key default gen_random_uuid(),
@@ -98,6 +112,7 @@ alter table tasks             enable row level security;
 alter table errors            enable row level security;
 alter table grammar_points    enable row level security;
 alter table vocab_cards       enable row level security;
+alter table vocab_quizzes     enable row level security;
 alter table taiwanese_scripts enable row level security;
 
 drop policy if exists "anon full access profiles"          on profiles;
@@ -105,6 +120,7 @@ drop policy if exists "anon full access tasks"             on tasks;
 drop policy if exists "anon full access errors"            on errors;
 drop policy if exists "anon full access grammar_points"    on grammar_points;
 drop policy if exists "anon full access vocab_cards"       on vocab_cards;
+drop policy if exists "anon full access vocab_quizzes"     on vocab_quizzes;
 drop policy if exists "anon full access taiwanese_scripts" on taiwanese_scripts;
 
 create policy "anon full access profiles"          on profiles          for all to anon using (true) with check (true);
@@ -112,4 +128,5 @@ create policy "anon full access tasks"             on tasks             for all 
 create policy "anon full access errors"            on errors            for all to anon using (true) with check (true);
 create policy "anon full access grammar_points"    on grammar_points    for all to anon using (true) with check (true);
 create policy "anon full access vocab_cards"       on vocab_cards       for all to anon using (true) with check (true);
+create policy "anon full access vocab_quizzes"     on vocab_quizzes     for all to anon using (true) with check (true);
 create policy "anon full access taiwanese_scripts" on taiwanese_scripts for all to anon using (true) with check (true);
