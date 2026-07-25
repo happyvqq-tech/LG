@@ -27,6 +27,7 @@ export default function VocabList() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
@@ -51,12 +52,15 @@ export default function VocabList() {
 
   if (!profile) return null
 
-  const shown = cards.filter((c) =>
-    filter === 'learning' ? c.stage > 0 && c.stage < MAX_STAGE : filter === 'mastered' ? c.stage >= MAX_STAGE : true,
-  )
+  const q = query.trim().toLowerCase()
+  const shown = cards
+    .filter((c) =>
+      filter === 'learning' ? c.stage > 0 && c.stage < MAX_STAGE : filter === 'mastered' ? c.stage >= MAX_STAGE : true,
+    )
+    .filter((c) => q === '' || c.word.toLowerCase().includes(q) || c.meaning_zh.toLowerCase().includes(q))
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-24">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-24">
       <button
         onClick={() => navigate('/vocab')}
         className="-ml-2 flex items-center gap-1 rounded-full px-2 text-sm font-semibold text-slate-500 active:bg-slate-100"
@@ -84,6 +88,13 @@ export default function VocabList() {
         ))}
       </div>
 
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="搜尋單字或中文意思…"
+        className="mt-3 w-full rounded-xl border border-slate-300 p-3"
+      />
+
       <div className="mt-3 flex items-center gap-2">
         <span className="shrink-0 text-sm text-slate-500">語速</span>
         <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
@@ -93,7 +104,9 @@ export default function VocabList() {
       {errorMsg && <p className="mt-6 rounded-xl bg-red-50 p-4 text-red-600">{errorMsg}</p>}
 
       {!loading && shown.length === 0 && (
-        <p className="mt-10 text-center text-slate-400">這裡還沒有單字，先去練一輪吧</p>
+        <p className="mt-10 text-center text-slate-400">
+          {cards.length === 0 ? '這裡還沒有單字，先去練一輪吧' : '找不到符合的單字'}
+        </p>
       )}
 
       <div className="mt-4 grid gap-2">

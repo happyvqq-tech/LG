@@ -46,7 +46,7 @@ export default function WeeklyReport() {
       if (result.errorCount === 0) setNoData(true)
       else setMarkdown(result.markdown)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `生成失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `生成失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setGenerating(false)
@@ -56,7 +56,7 @@ export default function WeeklyReport() {
   if (!profile) return null
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-16">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-16">
       <button
         onClick={() => navigate('/home')}
         className="-ml-2 flex items-center gap-1 rounded-full px-2 text-sm font-semibold text-slate-500 active:bg-slate-100"

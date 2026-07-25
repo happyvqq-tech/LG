@@ -108,7 +108,7 @@ export default function ClassicalRead() {
   if (!profile) return null
   if (!entry) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <p className="mt-20 text-center text-slate-400">找不到這一篇</p>
         <button
           onClick={() => navigate('/classical')}
@@ -171,7 +171,7 @@ export default function ClassicalRead() {
       )
       setAnnotation(result)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `講解失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `講解失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setAnnotating(false)
@@ -205,7 +205,7 @@ export default function ClassicalRead() {
       // 錯誤入庫失敗不該擋住批改結果的顯示
       await syncClassicalErrors(profile!.id, passage, result.issues).catch(() => undefined)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `批改失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `批改失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setGrading(false)
@@ -234,9 +234,18 @@ export default function ClassicalRead() {
   }
 
   const stepIndex = STEPS.findIndex((s) => s.key === step)
+  // 勾勾要反映「這關真的做過」，不能只看分頁順序——不然跳著點分頁（例如直接
+  // 點翻譯）會讓中間被跳過的句讀／字詞也顯示假的✓（見稽核報告 P1-3）
+  const stepDone: Record<Step, boolean> = {
+    read: step !== 'read',
+    punctuate: punctScore !== null,
+    notes: annotation !== null,
+    translate: grade !== null,
+    comprehend: false,
+  }
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-12">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-12">
       <button
         onClick={() => {
           stopSpeaking()
@@ -256,41 +265,42 @@ export default function ClassicalRead() {
 
       {/* 步驟列 */}
       <ol className="mt-4 flex items-start">
-        {STEPS.map((s, i) => (
-          <li key={s.key} className="flex flex-1 items-start last:flex-none">
-            <button
-              onClick={() => setStep(s.key)}
-              className="flex flex-col items-center gap-1 px-1"
-              aria-current={i === stepIndex ? 'step' : undefined}
-            >
-              <span
-                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm transition ${
-                  i === stepIndex
-                    ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
-                    : i < stepIndex
-                      ? 'bg-teal-100 text-teal-700'
-                      : 'bg-slate-100 text-slate-400'
-                }`}
+        {STEPS.map((s, i) => {
+          const done = stepDone[s.key]
+          return (
+            <li key={s.key} className="flex flex-1 items-start last:flex-none">
+              <button
+                onClick={() => setStep(s.key)}
+                className="flex flex-col items-center gap-1 px-1"
+                aria-current={i === stepIndex ? 'step' : undefined}
               >
-                {i < stepIndex ? '✓' : s.icon}
-              </span>
-              <span
-                className={`text-xs font-semibold ${
-                  i === stepIndex ? 'text-teal-700' : i < stepIndex ? 'text-teal-600' : 'text-slate-400'
-                }`}
-              >
-                {s.label}
-              </span>
-            </button>
-            {i < STEPS.length - 1 && (
-              <span
-                className={`mt-[18px] h-0.5 flex-1 rounded-full ${
-                  i < stepIndex ? 'bg-teal-300' : 'bg-slate-200'
-                }`}
-              />
-            )}
-          </li>
-        ))}
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm transition ${
+                    i === stepIndex
+                      ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
+                      : done
+                        ? 'bg-teal-100 text-teal-700'
+                        : 'bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  {i === stepIndex ? s.icon : done ? '✓' : s.icon}
+                </span>
+                <span
+                  className={`text-xs font-semibold ${
+                    i === stepIndex ? 'text-teal-700' : done ? 'text-teal-600' : 'text-slate-400'
+                  }`}
+                >
+                  {s.label}
+                </span>
+              </button>
+              {i < STEPS.length - 1 && (
+                <span
+                  className={`mt-[18px] h-0.5 flex-1 rounded-full ${done ? 'bg-teal-300' : 'bg-slate-200'}`}
+                />
+              )}
+            </li>
+          )
+        })}
       </ol>
 
       {errorMsg && <p className="mt-4 rounded-xl bg-red-50 p-3 text-red-600">{errorMsg}</p>}
@@ -543,6 +553,12 @@ export default function ClassicalRead() {
                 </div>
               )}
 
+              {grade.issues.length > 0 && (
+                <p className="mt-2 text-center text-xs text-slate-400">
+                  📚 這幾個錯誤已加入你的錯誤庫，之後會再出現複習
+                </p>
+              )}
+
               <button
                 onClick={() => setStep('comprehend')}
                 className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
@@ -557,7 +573,17 @@ export default function ClassicalRead() {
       {/* ---------- 文意 ---------- */}
       {step === 'comprehend' && (
         <section className="mt-5">
-          {!annotation?.questions?.length ? (
+          {annotation === null ? (
+            <div className="rounded-2xl bg-white p-5 text-center shadow-sm ring-1 ring-slate-200/60">
+              <p className="text-slate-500">請先完成「字詞」關卡，才能看到這段的思考題</p>
+              <button
+                onClick={() => setStep('notes')}
+                className="mt-3 w-full rounded-xl bg-teal-50 py-2.5 font-semibold text-teal-700"
+              >
+                去字詞關卡 →
+              </button>
+            </div>
+          ) : !annotation.questions?.length ? (
             <p className="rounded-2xl bg-white p-5 text-center text-slate-500 shadow-sm ring-1 ring-slate-200/60">
               這段沒有額外的思考題，直接進下一段吧
             </p>

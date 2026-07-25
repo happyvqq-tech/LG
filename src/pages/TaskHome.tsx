@@ -101,7 +101,7 @@ export default function TaskHome() {
       const saved = await createTask(profile.id, language as Language, taskJson)
       setTask(saved)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `任務生成失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `任務生成失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setGenerating(false)
@@ -117,7 +117,7 @@ export default function TaskHome() {
   if (!profile) return null
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-24">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-24">
       <header className="flex items-center justify-between pt-2">
         <div className="flex items-center gap-3">
           <Avatar profile={profile} size="sm" />
@@ -133,7 +133,7 @@ export default function TaskHome() {
         </Link>
       </header>
 
-      <TodayDashboard profile={profile} task={task} />
+      <TodayDashboard profile={profile} task={task} taskLoading={loading} />
 
       {profile.daily_plan && profile.daily_plan.days.length > 0 && (
         <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
@@ -181,7 +181,7 @@ export default function TaskHome() {
             <p className="text-sm font-semibold text-teal-700">
               {language}・{task.task_json.grammar_points_used.join('、') || '綜合練習'}
             </p>
-            <h3 className="mt-2 text-2xl font-bold">{task.task_json.scenario_title}</h3>
+            <h3 className="mt-2 break-words text-2xl font-bold">{task.task_json.scenario_title}</h3>
             <p className="mt-2 text-slate-600">{task.task_json.scenario_desc}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {([

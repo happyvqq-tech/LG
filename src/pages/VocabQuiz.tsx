@@ -82,7 +82,7 @@ export default function VocabQuiz() {
       setIndex(0)
       setAnswers([])
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `出題失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `出題失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setLoading(false)
@@ -135,7 +135,7 @@ export default function VocabQuiz() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <p className="mt-20 text-center text-slate-400">正在出題，約需 10 秒…</p>
         <p className="mt-2 text-center text-sm text-slate-400">
           每題都是全新情境，不會是你背過的那句例句
@@ -146,7 +146,7 @@ export default function VocabQuiz() {
 
   if (notEnough) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <div className="mt-16 rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200/60">
           <p className="text-4xl">🌱</p>
           <h1 className="mt-3 text-xl font-bold">還不夠出一份測驗</h1>
@@ -173,7 +173,7 @@ export default function VocabQuiz() {
 
   if (errorMsg && !finished) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <div className="mt-10 rounded-2xl bg-red-50 p-4 text-red-600">
           {errorMsg}
           <button
@@ -202,7 +202,7 @@ export default function VocabQuiz() {
     const score = answers.reduce((s, a) => s + a.score, 0)
     const pct = Math.round((score / answers.length) * 100)
     return (
-      <main className="mx-auto max-w-xl p-6 pb-12">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-12">
         <div className="rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/60">
           <p className="text-5xl">{pct >= 90 ? '🏆' : pct >= 70 ? '👍' : '💪'}</p>
           <h1 className="mt-3 text-3xl font-bold">
@@ -272,7 +272,7 @@ export default function VocabQuiz() {
   if (!q) return null
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col p-6 pb-10">
+    <main className="mx-auto flex min-h-dvh max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
       <header className="flex items-center gap-3">
         <button
           onClick={() => navigate('/vocab')}

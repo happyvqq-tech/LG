@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
-import TaskNav from '../components/TaskNav'
+import { updateTaskJson } from '../lib/taskService'
+import TaskNav, { type SkillStep } from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
 
+const LOCKED_STEPS: SkillStep[] = ['reading', 'speaking', 'writing']
+
 export default function Listening() {
   const navigate = useNavigate()
-  const { task, loading } = useActiveTask()
+  const { task, setTask, loading } = useActiveTask()
   const sentences = useMemo(
     () => splitSentences(task?.task_json.listening_script ?? ''),
     [task],
@@ -22,6 +25,7 @@ export default function Listening() {
   const [listenCount, setListenCount] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
   const sessionRef = useRef(0)
+  const persistedDoneRef = useRef(false)
 
   // 離開頁面時停止播放
   useEffect(() => {
@@ -63,16 +67,24 @@ export default function Listening() {
     }
   }
 
+  const canProceed = listenCount >= 2 || task?.task_json.listening_done === true
+
+  // 聽滿 2 次要存進 task_json，不然離開這頁再回來（或直接跳去別的分頁）進度就會歸零，
+  // 「聽兩次才能進閱讀」這個關卡就形同虛設（見稽核報告 P0-2）
+  useEffect(() => {
+    if (!task || !canProceed || task.task_json.listening_done || persistedDoneRef.current) return
+    persistedDoneRef.current = true
+    void updateTaskJson(task, { listening_done: true }).then(setTask).catch(() => undefined)
+  }, [task, canProceed, setTask])
+
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
 
-  const canProceed = listenCount >= 2
-
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6 pb-10">
-      <TaskNav current="listening" />
+    <main className="mx-auto flex min-h-screen max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
+      <TaskNav current="listening" locked={canProceed ? [] : LOCKED_STEPS} />
       <header>
         <p className="text-sm font-semibold text-teal-700">第一關・聽力</p>
-        <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
+        <h1 className="mt-1 break-words text-2xl font-bold">{task.task_json.scenario_title}</h1>
         <p className="mt-1 text-slate-500">{task.task_json.scenario_desc}</p>
       </header>
 

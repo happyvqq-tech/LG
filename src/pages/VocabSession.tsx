@@ -6,6 +6,7 @@ import { logActivity } from '../lib/streakService'
 import { MODE_LABELS, modeForStage, type DrillMode, type Grade } from '../lib/srs'
 import { speak, stopSpeaking } from '../lib/speech'
 import { ClaudeError } from '../lib/claude'
+import { judgeAnswer, VERDICT_LABELS } from '../lib/quizGrading'
 import { seedsFor, examLanguage, type ExamSystem } from '../data/vocabLists'
 import SpeedPicker from '../components/SpeedPicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
@@ -61,10 +62,6 @@ function blankOut(example: string, word: string): string {
   return example.replace(new RegExp(escaped, 'gi'), '＿＿＿')
 }
 
-function normalizeAnswer(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
 export default function VocabSession() {
   const navigate = useNavigate()
   const { profile } = useProfile()
@@ -80,10 +77,13 @@ export default function VocabSession() {
   const [picked, setPicked] = useState<string | null>(null)
   const [typed, setTyped] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [done, setDone] = useState(false)
   const [tally, setTally] = useState({ right: 0, wrong: 0 })
   const startedRef = useRef(false)
   const loggedActivityRef = useRef(false)
+  const busyRef = useRef(false)
+  const lastGradeRef = useRef<Grade | null>(null)
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
   const card = queue[index] as VocabCard | undefined
@@ -119,7 +119,7 @@ export default function VocabSession() {
         setQueue(shuffle(all))
       }
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `載入單字失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `載入單字失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setLoading(false)
@@ -140,12 +140,14 @@ export default function VocabSession() {
 
   if (!profile) return null
 
+  // 產出關卡的判分改用跟每日測驗同一套 judgeAnswer——之前是嚴格字串比對，
+  // 打錯一個字母或打成時態變化都直接判死，跟測驗頁的寬容度不一致（見稽核報告 P1-4）
+  const produceVerdict = card && mode === 'produce' ? judgeAnswer(typed, card.word, card.reading) : null
   const isCorrect =
     !card || mode === 'intro'
       ? true
       : mode === 'produce'
-        ? normalizeAnswer(typed) === normalizeAnswer(card.word) ||
-          (card.reading !== '' && normalizeAnswer(typed) === normalizeAnswer(card.reading))
+        ? produceVerdict !== 'wrong'
         : picked === (mode === 'recognize' ? card.meaning_zh : card.word)
 
   function reveal(answer?: string) {
@@ -155,8 +157,13 @@ export default function VocabSession() {
   }
 
   async function submitGrade(grade: Grade) {
-    if (!card || saving) return
+    // busyRef 是同步鎖，理由同 Writing.tsx 的 submit()（見稽核報告 P0-3）：
+    // 連點兩下曾實測讓同一張卡的 SRS 進度被寫兩次，結算畫面分數也算錯
+    if (!card || busyRef.current) return
+    busyRef.current = true
+    lastGradeRef.current = grade
     setSaving(true)
+    setSaveError('')
     try {
       if (!loggedActivityRef.current && profile) {
         loggedActivityRef.current = true
@@ -176,15 +183,18 @@ export default function VocabSession() {
         setTyped('')
       }
     } catch (e: unknown) {
-      setErrorMsg(`儲存進度失敗：${String((e as Error).message)}`)
+      // 存檔失敗只在原地顯示、可針對這張卡重試，不要把整個 session 的
+      // queue/index 沖掉、逼使用者從頭再練一次（見稽核報告 P2-9）
+      setSaveError('進度暫時存不起來，請檢查網路後重試')
     } finally {
+      busyRef.current = false
       setSaving(false)
     }
   }
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <p className="mt-20 text-center text-slate-400">{loadNote || '載入中…'}</p>
       </main>
     )
@@ -192,7 +202,7 @@ export default function VocabSession() {
 
   if (errorMsg) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <div className="mt-10 rounded-2xl bg-red-50 p-4 text-red-600">
           {errorMsg}
           <button
@@ -218,7 +228,7 @@ export default function VocabSession() {
   if (done || !card) {
     const total = tally.right + tally.wrong
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <div className="mt-16 rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200/60">
           <p className="text-5xl">{total === 0 ? '☕' : tally.wrong === 0 ? '🏆' : '💪'}</p>
           <h1 className="mt-3 text-2xl font-bold">
@@ -245,7 +255,7 @@ export default function VocabSession() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col p-6 pb-10">
+    <main className="mx-auto flex min-h-dvh max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
       <header className="flex items-center gap-3">
         <button
           onClick={() => {
@@ -416,7 +426,13 @@ export default function VocabSession() {
         {revealed && mode !== 'intro' && (
           <div className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
             <p className={`text-lg font-bold ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-              {isCorrect ? '答對了！' : `正確答案：${card.word}`}
+              {mode === 'produce' && produceVerdict
+                ? produceVerdict === 'wrong'
+                  ? `正確答案：${card.word}`
+                  : `${VERDICT_LABELS[produceVerdict]}：${card.word}`
+                : isCorrect
+                  ? '答對了！'
+                  : `正確答案：${card.word}`}
             </p>
             {!isCorrect && (
               <p className="mt-1 text-slate-600">
@@ -430,6 +446,18 @@ export default function VocabSession() {
                 {card.example_zh && <span className="block">{card.example_zh}</span>}
               </p>
             )}
+          </div>
+        )}
+
+        {saveError && (
+          <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+            {saveError}
+            <button
+              onClick={() => lastGradeRef.current && void submitGrade(lastGradeRef.current)}
+              className="ml-3 rounded bg-red-600 px-3 py-1 font-semibold text-white"
+            >
+              重試
+            </button>
           </div>
         )}
       </section>

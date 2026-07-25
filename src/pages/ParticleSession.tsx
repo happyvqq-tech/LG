@@ -45,7 +45,7 @@ export default function ParticleSession() {
       if (qs.length === 0) setDone(true)
       else setQuestions(qs)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `載入失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `載入失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setLoading(false)
@@ -89,7 +89,7 @@ export default function ParticleSession() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <p className="mt-20 text-center text-slate-400">正在準備真實例句，約需 10 秒…</p>
       </main>
     )
@@ -97,7 +97,7 @@ export default function ParticleSession() {
 
   if (errorMsg && !done) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <div className="mt-10 rounded-2xl bg-red-50 p-4 text-red-600">
           {errorMsg}
           <button
@@ -123,7 +123,7 @@ export default function ParticleSession() {
   if (done || !q) {
     const total = tally.right + tally.wrong
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <div className="mt-16 rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200/60">
           <p className="text-5xl">{total === 0 ? '☕' : tally.wrong === 0 ? '🏆' : '💪'}</p>
           <h1 className="mt-3 text-2xl font-bold">{total === 0 ? '今天沒有到期的虛詞' : '這輪練完了'}</h1>
@@ -147,7 +147,7 @@ export default function ParticleSession() {
   const isCorrect = picked === q.correctSenseId
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col p-6 pb-10">
+    <main className="mx-auto flex min-h-dvh max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
       <header className="flex items-center gap-3">
         <button
           onClick={() => navigate('/classical')}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
@@ -15,6 +15,9 @@ function countUnits(text: string, language: string): number {
   return text.trim() === '' ? 0 : text.trim().split(/\s+/).length
 }
 
+/** 內容比這個短，批改的參考價值有限，給個軟性提示（不擋送出） */
+const MIN_UNITS_HINT = 8
+
 export default function Writing() {
   const navigate = useNavigate()
   const { task, setTask, loading } = useActiveTask()
@@ -23,6 +26,7 @@ export default function Writing() {
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [drillError, setDrillError] = useState<GraderError | null>(null)
+  const busyRef = useRef(false)
 
   // 復原已作答/已批改的狀態（重新整理續作）
   useEffect(() => {
@@ -32,18 +36,28 @@ export default function Writing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id])
 
+  // 聽力關卡沒達成就不能進寫作，不然「聽兩次才能繼續」形同虛設（見稽核報告 P0-2）
+  useEffect(() => {
+    if (task && !task.task_json.listening_done) navigate('/listening', { replace: true })
+  }, [task, navigate])
+
   const diff = useMemo(() => {
     if (!grading || !task) return null
     return diffTokens(grading.minimal_fix, grading.native_version, task.language)
   }, [grading, task])
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
+  if (!task.task_json.listening_done) return null
 
   const language = task.language === '日文' ? '日文' : '英文'
   const unitName = language === '日文' ? '字' : '字（words）'
+  const units = countUnits(answer, language)
 
   async function submit() {
-    if (!task || !answer.trim() || submitting) return
+    // busyRef 是同步鎖：手指連點兩下會在 state 更新生效前就衝進來第二次，
+    // 光靠 submitting 這個 state 擋不住（見稽核報告 P0-3）
+    if (!task || !answer.trim() || busyRef.current) return
+    busyRef.current = true
     setSubmitting(true)
     setErrorMsg('')
     try {
@@ -70,19 +84,20 @@ export default function Writing() {
       const synced = await syncTaskErrors(updated, result.errors)
       setTask(synced)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `批改失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `批改失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
+      busyRef.current = false
       setSubmitting(false)
     }
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-12">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-12">
       <TaskNav current="writing" />
       <header>
         <p className="text-sm font-semibold text-teal-700">第四關・寫作</p>
-        <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
+        <h1 className="mt-1 break-words text-2xl font-bold">{task.task_json.scenario_title}</h1>
       </header>
 
       <section className="mt-4 rounded-2xl bg-white p-5 shadow">
@@ -97,7 +112,7 @@ export default function Writing() {
         />
         <div className="mt-1 flex items-center justify-between">
           <span className="text-sm text-slate-400">
-            {countUnits(answer, language)} {unitName}
+            {units} {unitName}
           </span>
           <button
             onClick={() => void submit()}
@@ -107,6 +122,9 @@ export default function Writing() {
             {submitting ? '批改中…' : grading ? '重新批改' : '提交批改'}
           </button>
         </div>
+        {answer.trim() !== '' && units < MIN_UNITS_HINT && !grading && (
+          <p className="mt-1.5 text-xs text-amber-600">內容有點短，批改可能不夠準確，建議再多寫一點</p>
+        )}
         {errorMsg && (
           <div className="mt-3 rounded-xl bg-red-50 p-3 text-red-600">
             {errorMsg}

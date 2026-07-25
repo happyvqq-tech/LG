@@ -44,9 +44,24 @@ export default function Shadowing() {
   const sentence = sentences[index] ?? ''
   const pass = result !== null && result.score >= SHADOW_PASS_THRESHOLD
 
+  /** 換到新句子：連嘗試次數也歸零 */
   function resetForSentence() {
     setPhase('idle')
     setAttempts(0)
+    setResult(null)
+    setRecognizedText('')
+    setErrorMsg('')
+    setHasHeardDemo(false)
+    aiDurationRef.current = 0
+  }
+
+  /**
+   * 同一句再試一次：刻意不歸零 attempts。跟 resetForSentence 曾經是同一個函式，
+   * 導致「跳過這句」永遠等不到 attempts>=2 的那一刻，連續唸錯幾次也跳不出去
+   * （見稽核報告 P1-1）。
+   */
+  function retrySentence() {
+    setPhase('idle')
     setResult(null)
     setRecognizedText('')
     setErrorMsg('')
@@ -71,7 +86,9 @@ export default function Shadowing() {
   }
 
   function startRecording() {
-    if (phase === 'ai-reading' || phase === 'recording') return
+    // 瀏覽器對 disabled 按鈕只保證擋掉 click，pointerdown 這類低階事件不一定
+    // 被擋（實測過），所以這裡不能只靠 DOM 的 disabled 屬性（見稽核報告 P1-2）
+    if (!hasHeardDemo || phase === 'ai-reading' || phase === 'recording') return
     stopSpeaking()
     try {
       const rec = new HoldToTalkRecognizer()
@@ -135,7 +152,7 @@ export default function Shadowing() {
 
   if (!sttSupported() || !ttsSupported()) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <TaskNav current="speaking" />
         <p className="rounded-xl bg-amber-50 p-4 text-amber-700">
           此瀏覽器不支援語音播放或語音辨識，跟讀朗讀需要兩者才能運作，請改用 Chrome 或 Edge。
@@ -146,7 +163,7 @@ export default function Shadowing() {
 
   if (sentences.length === 0) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <TaskNav current="speaking" />
         <p className="rounded-xl bg-amber-50 p-4 text-amber-700">這個任務沒有聽力稿可以跟讀。</p>
       </main>
@@ -155,7 +172,7 @@ export default function Shadowing() {
 
   if (finished) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6">
+      <main className="mx-auto flex min-h-screen max-w-xl lg:max-w-3xl flex-col p-6">
         <TaskNav current="speaking" />
         <div className="mt-8 rounded-3xl bg-white p-8 text-center shadow">
           <p className="text-4xl">🏆</p>
@@ -173,11 +190,11 @@ export default function Shadowing() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6 pb-10">
+    <main className="mx-auto flex min-h-screen max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
       <TaskNav current="speaking" />
       <header>
         <p className="text-sm font-semibold text-teal-700">🔁 跟讀朗讀（額外練習）</p>
-        <h1 className="mt-1 text-xl font-bold">{task.task_json.scenario_title}</h1>
+        <h1 className="mt-1 break-words text-xl font-bold">{task.task_json.scenario_title}</h1>
         <p className="mt-1 text-sm text-slate-400">
           第 {index + 1} / {sentences.length} 句・已過關 {passed.size} 句
         </p>
@@ -245,12 +262,14 @@ export default function Shadowing() {
             </p>
             <p className="mt-1 text-xs text-slate-400">
               文字吻合 {Math.round(result.textAccuracy * 100)}% ・ 節奏接近度 {Math.round(result.timing * 100)}%
-              （瀏覽器語音辨識估算，非真正聲學評分）
+            </p>
+            <p className="mt-1.5 text-sm font-semibold text-amber-700">
+              ⓘ 這是瀏覽器語音辨識估算的分數，不是真正的聲學評分
             </p>
             <div className="mt-3 flex gap-2">
               {!pass && (
                 <button
-                  onClick={resetForSentence}
+                  onClick={retrySentence}
                   className="flex-1 rounded-xl bg-slate-100 py-2.5 font-semibold text-slate-600"
                 >
                   再試一次

@@ -63,7 +63,7 @@ export default function MemberSelect() {
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-24">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-24">
       <header className="pt-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-teal-800">家庭語言學習</h1>
         <p className="mt-2 text-slate-500">今天誰要練習？</p>

@@ -19,7 +19,17 @@ interface DashboardData {
   streak: StreakInfo
 }
 
-export default function TodayDashboard({ profile, task }: { profile: Profile; task: Task | null }) {
+export default function TodayDashboard({
+  profile,
+  task,
+  taskLoading,
+}: {
+  profile: Profile
+  task: Task | null
+  /** 今日任務還在抓取中——抓到之前不能下「今天都做完了」的結論，
+   *  不然慢網路下 task 暫時是 null 會被誤判成沒有任務可做（見稽核報告 P1-6） */
+  taskLoading: boolean
+}) {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
 
@@ -57,6 +67,15 @@ export default function TodayDashboard({ profile, task }: { profile: Profile; ta
   }, [profile])
 
   if (!data) return null
+
+  if (taskLoading) {
+    return (
+      <section className="mt-4 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-md shadow-teal-600/20">
+        <p className="text-sm font-semibold text-teal-50/90">今天</p>
+        <p className="mt-2 text-sm text-teal-50/80">載入中…</p>
+      </section>
+    )
+  }
 
   const todo = pickTodo(data, task)
 

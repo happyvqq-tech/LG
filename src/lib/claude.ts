@@ -17,10 +17,17 @@ export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse'
 
 export class ClaudeError extends Error {
   kind: ClaudeErrorKind
-  constructor(kind: ClaudeErrorKind, message: string) {
+  /**
+   * 給使用者看的白話訊息。技術細節（狀態碼、原始 API 錯誤字串、環境變數
+   * 名稱）留在 message 供開發除錯，不該直接出現在一般家庭成員眼前
+   * （見稽核報告 P2-1）。
+   */
+  friendlyMessage: string
+  constructor(kind: ClaudeErrorKind, message: string, friendlyMessage?: string) {
     super(message)
     this.name = 'ClaudeError'
     this.kind = kind
+    this.friendlyMessage = friendlyMessage ?? message
   }
 }
 
@@ -39,7 +46,11 @@ interface AnthropicResponse {
 export async function callClaude(args: CallClaudeArgs): Promise<string> {
   const workerUrl = import.meta.env.VITE_WORKER_URL
   if (!workerUrl) {
-    throw new ClaudeError('api', '缺少 VITE_WORKER_URL，請依 .env.example 建立 .env')
+    throw new ClaudeError(
+      'api',
+      '缺少 VITE_WORKER_URL，請依 .env.example 建立 .env',
+      'AI 服務目前無法使用，請稍後再試',
+    )
   }
   const cfg = MODULE_CONFIG[args.module]
 
@@ -79,7 +90,13 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
     if (res.status === 529 || res.status === 503) {
       throw new ClaudeError('api', 'AI 服務忙碌中，稍等幾秒再按重試')
     }
-    throw new ClaudeError('api', `AI 服務錯誤（${res.status}）${detail ? '：' + detail : ''}`)
+    // 原始技術細節（狀態碼、後端錯誤字串）留在 message 供除錯，
+    // 使用者看到的是白話的 friendlyMessage（見稽核報告 P2-1）
+    throw new ClaudeError(
+      'api',
+      `AI 服務錯誤（${res.status}）${detail ? '：' + detail : ''}`,
+      'AI 服務暫時發生問題，請稍後再試',
+    )
   }
 
   const data = (await res.json()) as AnthropicResponse
@@ -121,5 +138,9 @@ export async function callClaudeJSON<T>(
       lastError = e
     }
   }
-  throw new ClaudeError('parse', `AI 回傳格式異常，請重試（${String(lastError)}）`)
+  throw new ClaudeError(
+    'parse',
+    `AI 回傳格式異常，請重試（${String(lastError)}）`,
+    'AI 回應的格式有點怪，請重試一次',
+  )
 }

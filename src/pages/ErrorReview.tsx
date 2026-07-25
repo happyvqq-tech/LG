@@ -85,7 +85,7 @@ export default function ErrorReview() {
       )
       setQuestions(result.questions)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `出題失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `出題失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
     } finally {
       setGenerating(false)
@@ -96,7 +96,7 @@ export default function ErrorReview() {
 
   if (!valid) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <p className="mt-20 text-center text-slate-400">找不到這個語言的錯誤庫</p>
         <button onClick={() => navigate('/home')} className="mt-4 w-full rounded-xl bg-teal-600 py-3 font-bold text-white">
           回首頁
@@ -106,7 +106,7 @@ export default function ErrorReview() {
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-12">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-12">
       <button
         onClick={() => navigate(backPath)}
         className="-ml-2 flex items-center gap-1 rounded-full px-2 text-sm font-semibold text-slate-500 active:bg-slate-100"

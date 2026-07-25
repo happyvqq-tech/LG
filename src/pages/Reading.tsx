@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, stopSpeaking } from '../lib/speech'
@@ -44,7 +44,13 @@ export default function Reading() {
   const [speakingChunk, setSpeakingChunk] = useState<number | null>(null)
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
+  // 聽力關卡沒達成就不能進閱讀，不然「聽兩次才能繼續」形同虛設（見稽核報告 P0-2）
+  useEffect(() => {
+    if (task && !task.task_json.listening_done) navigate('/listening', { replace: true })
+  }, [task, navigate])
+
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
+  if (!task.task_json.listening_done) return null
 
   const { listening_script, chunks } = task.task_json
   const lang = task.language
@@ -62,11 +68,11 @@ export default function Reading() {
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-10">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-10">
       <TaskNav current="reading" />
       <header>
         <p className="text-sm font-semibold text-teal-700">第二關・閱讀</p>
-        <h1 className="mt-1 text-2xl font-bold">{task.task_json.scenario_title}</h1>
+        <h1 className="mt-1 break-words text-2xl font-bold">{task.task_json.scenario_title}</h1>
       </header>
 
       <section className="mt-5 rounded-2xl bg-white p-5 shadow">

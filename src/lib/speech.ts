@@ -17,6 +17,9 @@ export function ttsSupported(): boolean {
 }
 
 let voicesCache: SpeechSynthesisVoice[] = []
+// 有些裝置 getVoices() 永遠回傳空陣列。沒有這個旗標的話，每次播放都會重新
+// 等滿 1.5 秒的 fallback，全站語音功能都會被拖慢（見稽核報告 P2-3）。
+let voicesLoadAttempted = false
 
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   if (!ttsSupported()) return Promise.resolve([])
@@ -25,13 +28,20 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
     voicesCache = current
     return Promise.resolve(current)
   }
+  // 已經等過一次還是沒有 voice，就不要每次播放都重等——下面掛著的
+  // voiceschanged 監聽器不會被移除，真的之後有 voice 到位還是會補上 voicesCache
+  if (voicesLoadAttempted) return Promise.resolve([])
   // iOS/Android 首次呼叫常回空陣列，需等 voiceschanged
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(window.speechSynthesis.getVoices()), 1500)
+    const timer = setTimeout(() => {
+      voicesLoadAttempted = true
+      resolve(window.speechSynthesis.getVoices())
+    }, 1500)
     window.speechSynthesis.addEventListener(
       'voiceschanged',
       () => {
         clearTimeout(timer)
+        voicesLoadAttempted = true
         voicesCache = window.speechSynthesis.getVoices()
         resolve(voicesCache)
       },

@@ -39,6 +39,11 @@ export default function Speaking() {
 
   taskRef.current = task
 
+  // 聽力關卡沒達成就不能進口說，不然「聽兩次才能繼續」形同虛設（見稽核報告 P0-2）
+  useEffect(() => {
+    if (task && !task.task_json.listening_done) navigate('/listening', { replace: true })
+  }, [task, navigate])
+
   useEffect(() => {
     return () => {
       stopSpeaking()
@@ -96,7 +101,7 @@ export default function Speaking() {
         void speak(stripCompleteMarker(reply), t.language, rateRef.current).catch(() => undefined)
       }
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `對話失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `對話失敗：${String((e as Error).message)}`
       setErrorMsg(msg)
       const lastUser = history[history.length - 1]
       setRetryText(lastUser?.role === 'user' ? lastUser.content : '')
@@ -147,13 +152,14 @@ export default function Speaking() {
   }
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
+  if (!task.task_json.listening_done) return null
 
   return (
-    <main className="mx-auto flex h-dvh max-w-xl flex-col p-4">
+    <main className="mx-auto flex h-dvh max-w-xl lg:max-w-3xl flex-col p-4">
       <TaskNav current="speaking" />
       <header className="px-2">
         <p className="text-sm font-semibold text-teal-700">第三關・口說</p>
-        <h1 className="text-xl font-bold">{task.task_json.scenario_title}</h1>
+        <h1 className="break-words text-xl font-bold">{task.task_json.scenario_title}</h1>
         <p className="mt-1 text-sm text-slate-500">目標：{task.task_json.speaking_goal}</p>
         <div className="mt-2 flex items-center gap-2">
           <span className="shrink-0 text-xs text-slate-400">語速</span>

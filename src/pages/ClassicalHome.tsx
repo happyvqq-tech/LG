@@ -82,7 +82,7 @@ export default function ClassicalHome() {
   if (!profile) return null
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-24">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-24">
       <button
         onClick={() => navigate('/home')}
         className="-ml-2 flex items-center gap-1 rounded-full px-2 text-sm font-semibold text-slate-500 active:bg-slate-100"

@@ -54,7 +54,7 @@ export default function ErrorBank({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50">
-      <div className="mx-auto max-w-xl p-6 pb-16">
+      <div className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-16">
         <header className="flex items-center justify-between pt-2">
           <h1 className="text-2xl font-bold">錯誤庫（{language}）</h1>
           <button onClick={onClose} className="rounded-full bg-white px-4 py-2 font-semibold text-slate-600 shadow-sm">

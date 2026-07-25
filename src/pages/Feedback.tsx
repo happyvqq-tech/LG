@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { processTaskCompletion } from '../lib/errorEngine'
@@ -37,6 +37,7 @@ export default function Feedback() {
   const { task, loading } = useActiveTask()
   const [finishing, setFinishing] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const busyRef = useRef(false)
   const [practice, setPractice] = useState<DrillQuestion[] | null>(null)
   const [practiceLoading, setPracticeLoading] = useState(false)
   const [practiceError, setPracticeError] = useState('')
@@ -78,7 +79,7 @@ export default function Feedback() {
       )
       setPractice(result.questions)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.message : `出題失敗：${String((e as Error).message)}`
+      const msg = e instanceof ClaudeError ? e.friendlyMessage : `出題失敗：${String((e as Error).message)}`
       setPracticeError(msg)
     } finally {
       setPracticeLoading(false)
@@ -86,7 +87,10 @@ export default function Feedback() {
   }
 
   async function finish() {
-    if (!task || finishing) return
+    // busyRef 是同步鎖，理由同 Writing.tsx 的 submit()（見稽核報告 P0-3）：
+    // 連點兩下曾實測造成 2 次 tasks 更新＋4 次 activity_log 寫入
+    if (!task || busyRef.current) return
+    busyRef.current = true
     setFinishing(true)
     setErrorMsg('')
     try {
@@ -112,13 +116,14 @@ export default function Feedback() {
       clearActiveTaskId()
       navigate('/home')
     } catch (e: unknown) {
+      busyRef.current = false
       setErrorMsg(`完成任務失敗：${String((e as Error).message)}`)
       setFinishing(false)
     }
   }
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-12">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-12">
       <button
         onClick={() => navigate('/home')}
         className="-ml-2 flex items-center gap-1 rounded-full px-2 text-sm font-semibold text-slate-500 active:bg-slate-100"

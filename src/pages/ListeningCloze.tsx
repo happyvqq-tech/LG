@@ -91,7 +91,7 @@ export default function ListeningCloze() {
 
   if (!ttsSupported()) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <TaskNav current="listening" />
         <p className="rounded-xl bg-amber-50 p-4 text-amber-700">此瀏覽器不支援語音播放，請改用 Chrome 或 Edge。</p>
       </main>
@@ -100,7 +100,7 @@ export default function ListeningCloze() {
 
   if (rounds.length === 0) {
     return (
-      <main className="mx-auto max-w-xl p-6">
+      <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <TaskNav current="listening" />
         <p className="rounded-xl bg-amber-50 p-4 text-amber-700">這篇聽力稿太短，找不到適合挖空的關鍵字。</p>
       </main>
@@ -110,7 +110,7 @@ export default function ListeningCloze() {
   if (finished) {
     const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     return (
-      <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6">
+      <main className="mx-auto flex min-h-screen max-w-xl lg:max-w-3xl flex-col p-6">
         <TaskNav current="listening" />
         <div className="mt-8 rounded-3xl bg-white p-8 text-center shadow">
           <p className="text-4xl">{avg >= 80 ? '🏆' : '💪'}</p>
@@ -128,7 +128,7 @@ export default function ListeningCloze() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col p-6 pb-10">
+    <main className="mx-auto flex min-h-screen max-w-xl lg:max-w-3xl flex-col p-6 pb-10">
       <TaskNav current="listening" />
       <header>
         <p className="text-sm font-semibold text-teal-700">📝 挖空聽寫（額外練習）</p>

@@ -52,7 +52,7 @@ export default function VocabHome() {
   const todayResult = takenToday(history)
 
   return (
-    <main className="mx-auto max-w-xl p-6 pb-24">
+    <main className="mx-auto max-w-xl lg:max-w-3xl p-6 pb-24">
       <button
         onClick={() => navigate('/home')}
         className="-ml-2 flex items-center gap-1 rounded-full px-2 text-sm font-semibold text-slate-500 active:bg-slate-100"
@@ -114,10 +114,22 @@ export default function VocabHome() {
             {stats.due > 0 ? `開始複習（${stats.due} 個到期）` : `學新字（${pref.daily_new} 個）`}
           </button>
 
-          {stats.due === 0 && stats.total > 0 && (
+          {stats.due === 0 && stats.total > 0 && pref.daily_new > 0 && (
             <p className="mt-3 rounded-2xl bg-green-50 p-4 text-center text-green-700 ring-1 ring-green-100">
               🎉 今天的複習都完成了，可以直接學新字
             </p>
+          )}
+
+          {stats.due === 0 && pref.daily_new === 0 && (
+            <div className="mt-3 rounded-2xl bg-amber-50 p-4 text-center text-amber-700 ring-1 ring-amber-100">
+              <p>今天的複習都完成了，但每日新字設定是 0 個，暫時沒有新字可學</p>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="mt-2 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-amber-700 ring-1 ring-amber-200"
+              >
+                ⚙️ 去設定調高每日新字量
+              </button>
+            </div>
           )}
 
           {stats.total === 0 && (

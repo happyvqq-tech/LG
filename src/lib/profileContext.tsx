@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import { supabase } from './supabase'
+import { clearActiveTaskId } from './taskService'
 import type { Profile } from './types'
 
 const STORAGE_KEY = 'lgl.selectedProfile'
@@ -27,11 +28,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(loadStored)
 
   const selectProfile = useCallback((p: Profile) => {
-    setProfile(p)
+    // 換成不同的人時，把上一位留下的進行中任務 id 清掉——不然共用裝置時
+    // 這位翻到練習頁會直接看到、甚至誤送出上一位的任務內容（見稽核報告 P0-1）
+    setProfile((prev) => {
+      if (prev && prev.id !== p.id) clearActiveTaskId()
+      return p
+    })
     localStorage.setItem(STORAGE_KEY, JSON.stringify(p))
   }, [])
 
   const clearProfile = useCallback(() => {
+    clearActiveTaskId()
     setProfile(null)
     localStorage.removeItem(STORAGE_KEY)
   }, [])

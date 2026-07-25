@@ -74,6 +74,8 @@ export interface TaskJson {
   writing_prompt: string
   grammar_points_used: string[]
   // 流程中寫入
+  /** 聽力關卡是否已達成（完整聽 2 次），用於擋住 Reading/Speaking/Writing 被跳過 */
+  listening_done?: boolean
   speaking_transcript?: ChatMessage[]
   grading?: GraderResult
   writing_answer?: string
