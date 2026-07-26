@@ -6,6 +6,7 @@ import { useActiveTask } from '../lib/useActiveTask'
 import { speak, splitSentences, stopSpeaking, sttSupported, ttsSupported, HoldToTalkRecognizer } from '../lib/speech'
 import { computeShadowScore, SHADOW_PASS_THRESHOLD, type ShadowScoreResult } from '../lib/prosodyScore'
 import { logActivity } from '../lib/streakService'
+import { ensureListeningTranslation } from '../lib/translationService'
 import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
@@ -14,7 +15,7 @@ type Phase = 'idle' | 'ai-reading' | 'recording' | 'scored'
 
 export default function Shadowing() {
   const navigate = useNavigate()
-  const { task, loading } = useActiveTask()
+  const { task, setTask, loading } = useActiveTask()
   const sentences = useMemo(() => splitSentences(task?.task_json.listening_script ?? ''), [task])
   const lang = task?.language ?? '英文'
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
@@ -28,6 +29,9 @@ export default function Shadowing() {
   const [errorMsg, setErrorMsg] = useState('')
   const [finished, setFinished] = useState(false)
   const [hasHeardDemo, setHasHeardDemo] = useState(false)
+  const [showZh, setShowZh] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translateError, setTranslateError] = useState('')
 
   const recognizerRef = useRef<HoldToTalkRecognizer | null>(null)
   const aiDurationRef = useRef(0)
@@ -133,6 +137,25 @@ export default function Shadowing() {
     }
   }
 
+  async function toggleShowZh() {
+    if (showZh) {
+      setShowZh(false)
+      return
+    }
+    setShowZh(true)
+    if (!task || task.task_json.listening_translation) return
+    setTranslating(true)
+    setTranslateError('')
+    try {
+      const result = await ensureListeningTranslation(task)
+      setTask(result.task)
+    } catch (e: unknown) {
+      setTranslateError(`翻譯失敗：${String((e as Error).message)}`)
+    } finally {
+      setTranslating(false)
+    }
+  }
+
   function goNext(skip = false) {
     if (!skip && !pass) return
     stopSpeaking()
@@ -213,6 +236,24 @@ export default function Shadowing() {
 
       <section className="mt-6 rounded-3xl bg-white p-6 shadow">
         <p className="text-lg font-semibold leading-relaxed">{sentence}</p>
+
+        {showZh && (
+          <div className="mt-1.5 min-h-[1.25rem]">
+            {translating && <p className="text-sm text-slate-400">翻譯中…</p>}
+            {translateError && <p className="text-sm text-red-600">{translateError}</p>}
+            {task.task_json.listening_translation && !translating && (
+              <p className="text-teal-700">{task.task_json.listening_translation[index]}</p>
+            )}
+          </div>
+        )}
+        <button
+          onClick={() => void toggleShowZh()}
+          className={`mt-2 rounded-full px-3 py-1 text-xs font-semibold ${
+            showZh ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {showZh ? '隱藏中文' : '顯示中文'}
+        </button>
 
         <div className="mt-5 flex items-center gap-3">
           <button

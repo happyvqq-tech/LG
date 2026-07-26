@@ -76,6 +76,9 @@ export interface TaskJson {
   // 流程中寫入
   /** 聽力關卡是否已達成（完整聽 2 次），用於擋住 Reading/Speaking/Writing 被跳過 */
   listening_done?: boolean
+  /** 聽力稿逐句中文翻譯，跟 splitSentences(listening_script) 的順序一一對應；
+   *  使用者第一次按「顯示中文」才會呼叫 AI 翻譯並存在這裡，之後重複使用 */
+  listening_translation?: string[]
   speaking_transcript?: ChatMessage[]
   grading?: GraderResult
   writing_answer?: string

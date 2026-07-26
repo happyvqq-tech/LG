@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { speak, speakSequence, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
 import { updateTaskJson } from '../lib/taskService'
+import { ensureListeningTranslation } from '../lib/translationService'
 import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import VoicePicker from '../components/VoicePicker'
@@ -18,14 +19,18 @@ export default function Listening() {
   const lang = task?.language ?? '英文'
 
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
-  const [sentenceMode, setSentenceMode] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [index, setIndex] = useState(0)
   const [listenCount, setListenCount] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
+  const [showZh, setShowZh] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translateError, setTranslateError] = useState('')
   const sessionRef = useRef(0)
   const persistedDoneRef = useRef(false)
+
+  const translations = task?.task_json.listening_translation ?? null
 
   // 離開頁面時停止播放
   useEffect(() => {
@@ -41,31 +46,58 @@ export default function Listening() {
     setPlaying(false)
   }
 
-  /** 從第 start 句開始連續播（onlyOne=true 時只播一句） */
-  async function playFrom(start: number, onlyOne: boolean) {
+  /** 只播目前這一句——一句一句聽，不要一次排一大段（見使用者回報） */
+  async function playCurrent(i: number) {
+    stop()
+    const session = ++sessionRef.current
+    setIndex(i)
+    setPlaying(true)
+    setErrorMsg('')
+    try {
+      await speak(sentences[i], lang, rate)
+    } catch (e: unknown) {
+      if (sessionRef.current === session) setErrorMsg((e as Error).message)
+    } finally {
+      if (sessionRef.current === session) setPlaying(false)
+    }
+  }
+
+  /** 整段從頭到尾連續播一輪（不停頓），用來達成「聽兩次解鎖閱讀」 */
+  async function playFullPass() {
     stop()
     const session = ++sessionRef.current
     setPlaying(true)
     setErrorMsg('')
     try {
-      if (onlyOne) {
-        setIndex(start)
-        await speak(sentences[start], lang, rate)
-        return
-      }
-      // 整段用 speakSequence 一次排進佇列，句與句之間才不會有停頓
-      // （之前逐句 await，每句之間都聽得出空隙）
-      await speakSequence(sentences.slice(start), lang, rate, (i) => {
-        if (sessionRef.current === session) setIndex(start + i)
+      await speakSequence(sentences, lang, rate, (i) => {
+        if (sessionRef.current === session) setIndex(i)
       })
       if (sessionRef.current !== session) return
-      // 完整聽完一輪
       setListenCount((c) => c + 1)
       setIndex(0)
     } catch (e: unknown) {
       setErrorMsg((e as Error).message)
     } finally {
       if (sessionRef.current === session) setPlaying(false)
+    }
+  }
+
+  async function toggleShowZh() {
+    if (showZh) {
+      setShowZh(false)
+      return
+    }
+    setShowZh(true)
+    if (!task || translations) return
+    setTranslating(true)
+    setTranslateError('')
+    try {
+      const result = await ensureListeningTranslation(task)
+      setTask(result.task)
+    } catch (e: unknown) {
+      setTranslateError(`翻譯失敗：${String((e as Error).message)}`)
+    } finally {
+      setTranslating(false)
     }
   }
 
@@ -96,17 +128,33 @@ export default function Listening() {
         </p>
       )}
 
-      {/* 不顯示聽力稿文字，只給播放控制 */}
+      {/* 一句一句聽：不顯示英文原文，只給播放控制與可選的中文翻譯 */}
       <section className="mt-8 flex flex-1 flex-col items-center justify-center rounded-3xl bg-white p-8 shadow">
         <div className="flex h-28 w-28 items-center justify-center rounded-full bg-teal-50 text-5xl">
           🎧
         </div>
-        <p className="mt-4 text-slate-500">
-          {playing ? `播放中：第 ${index + 1} / ${sentences.length} 句` : `共 ${sentences.length} 句`}
+        <p className="mt-4 font-semibold text-slate-600">
+          第 {index + 1} / {sentences.length} 句
         </p>
-        <p className="mt-1 text-sm text-slate-400">已完整聽 {listenCount} 次（聽 2 次解鎖閱讀）</p>
 
-        <div className="mt-6 flex items-center gap-4">
+        {showZh && (
+          <div className="mt-2 min-h-[1.5rem] text-center">
+            {translating && <p className="text-sm text-slate-400">翻譯中…</p>}
+            {translateError && <p className="text-sm text-red-600">{translateError}</p>}
+            {translations && !translating && (
+              <p className="text-teal-700">{translations[index]}</p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-5 flex items-center gap-4">
+          <button
+            onClick={() => void playCurrent(Math.max(0, index - 1))}
+            disabled={playing || index === 0}
+            className="rounded-full bg-slate-100 px-4 py-2.5 font-semibold text-slate-600 disabled:opacity-30"
+          >
+            ← 上一句
+          </button>
           {playing ? (
             <button
               onClick={stop}
@@ -117,37 +165,41 @@ export default function Listening() {
             </button>
           ) : (
             <button
-              onClick={() => void playFrom(index, sentenceMode)}
+              onClick={() => void playCurrent(index)}
               className="h-16 w-16 rounded-full bg-teal-600 text-2xl text-white active:scale-95"
-              aria-label="播放"
+              aria-label="播放這句"
             >
               ▶
             </button>
           )}
           <button
-            onClick={() => void playFrom(0, false)}
-            className="rounded-full bg-slate-100 px-5 py-3 font-semibold text-slate-600 active:scale-95"
+            onClick={() => void playCurrent(Math.min(sentences.length - 1, index + 1))}
+            disabled={playing || index === sentences.length - 1}
+            className="rounded-full bg-slate-100 px-4 py-2.5 font-semibold text-slate-600 disabled:opacity-30"
           >
-            重播
+            下一句 →
           </button>
         </div>
 
-        {sentenceMode && (
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              onClick={() => void playFrom(Math.max(0, index - 1), true)}
-              className="rounded-full bg-slate-100 px-5 py-2.5 font-semibold text-slate-600"
-            >
-              ← 上一句
-            </button>
-            <button
-              onClick={() => void playFrom(Math.min(sentences.length - 1, index + 1), true)}
-              className="rounded-full bg-slate-100 px-5 py-2.5 font-semibold text-slate-600"
-            >
-              下一句 →
-            </button>
-          </div>
-        )}
+        <button
+          onClick={() => void toggleShowZh()}
+          className={`mt-4 rounded-full px-4 py-2 text-sm font-semibold ${
+            showZh ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {showZh ? '隱藏中文' : '顯示中文'}
+        </button>
+
+        <div className="mt-6 w-full border-t border-slate-100 pt-5 text-center">
+          <button
+            onClick={() => void playFullPass()}
+            disabled={playing}
+            className="rounded-full bg-teal-50 px-5 py-2.5 text-sm font-semibold text-teal-700 disabled:opacity-50"
+          >
+            🎧 整段從頭連續播放
+          </button>
+          <p className="mt-1.5 text-xs text-slate-400">已完整聽 {listenCount} 次（聽 2 次解鎖閱讀）</p>
+        </div>
 
         <div className="mt-6 w-full">
           <p className="text-sm font-semibold text-slate-600">語速</p>
@@ -160,28 +212,15 @@ export default function Listening() {
               }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              onClick={() => {
-                stop()
-                setSentenceMode(!sentenceMode)
-              }}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                sentenceMode ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              分句播放{sentenceMode ? '中' : ''}
-            </button>
-            <button
-              onClick={() => {
-                stop()
-                setShowVoicePicker(true)
-              }}
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600"
-            >
-              🗣️ 換發音
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              stop()
+              setShowVoicePicker(true)
+            }}
+            className="mt-3 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600"
+          >
+            🗣️ 換發音
+          </button>
         </div>
 
         <button
