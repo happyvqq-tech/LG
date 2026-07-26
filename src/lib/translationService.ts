@@ -4,6 +4,7 @@ import { callClaudeJSON } from './claude'
 import { makeIsTranslateResult, translateSystemPrompt } from './prompts/translate'
 import { updateTaskJson } from './taskService'
 import { splitSentences } from './speech'
+import { asTaskLanguage } from './types'
 import type { Task } from './types'
 
 /** 取得聽力稿逐句中文翻譯；已快取就直接回傳，沒有才呼叫 AI 並寫回任務 */
@@ -18,7 +19,7 @@ export async function ensureListeningTranslation(task: Task): Promise<{
     return { translations: cached, task }
   }
 
-  const language = task.language === '日文' ? '日文' : '英文'
+  const language = asTaskLanguage(task.language)
   const result = await callClaudeJSON(
     {
       module: 'grader',

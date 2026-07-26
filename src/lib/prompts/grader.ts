@@ -1,13 +1,14 @@
 // 批改回饋器 system prompt（CLAUDE.md 6.3，變數以模板注入）
 
-import type { ChatMessage, GraderResult } from '../types'
+import type { ChatMessage, GraderResult, TaskLanguage } from '../types'
 
-const ERROR_TYPES: Record<'英文' | '日文', string> = {
+const ERROR_TYPES: Record<TaskLanguage, string> = {
   英文: '時態/冠詞/單複數/介系詞/假設語氣/關係子句/分詞構句/倒裝/中式表達/用字',
   日文: '助詞/動詞變化/敬體普通體/時制/用字',
+  韓文: '助詞/語尾變化/敬語階/時制/語順/連結語尾/漢字語誤用/用字',
 }
 
-export function graderSystemPrompt(language: '英文' | '日文'): string {
+export function graderSystemPrompt(language: TaskLanguage): string {
   return `你是嚴謹的${language}寫作批改老師，服務對象為 B1+ 程度的台灣學習者。
 
 輸入：寫作題目、使用者作答、（可選）口說逐字稿。

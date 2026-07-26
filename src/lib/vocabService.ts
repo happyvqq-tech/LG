@@ -9,6 +9,7 @@ import {
 } from './prompts/vocabEnrich'
 import { seedsFor, type ExamSystem } from '../data/vocabLists'
 import { nextDueDate, schedule, toDateString, type Grade, type SrsState } from './srs'
+import { asTaskLanguage } from './types'
 import type { Language, VocabCard } from './types'
 
 /** 一次 AI 補完的字數上限（控制回應長度與等待時間） */
@@ -95,7 +96,7 @@ export async function addNewCards(
     {
       module: 'taskGenerator',
       system: vocabEnrichSystemPrompt({
-        language: language === '日文' ? '日文' : '英文',
+        language: asTaskLanguage(language),
         exam,
         examLevel,
         seeds,

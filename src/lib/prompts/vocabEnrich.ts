@@ -3,9 +3,10 @@
 // 內建字表用完時，也用同一支 prompt 直接生成新字
 
 import type { VocabSeed } from '../../data/vocabLists'
+import type { TaskLanguage } from '../types'
 
 export interface VocabEnrichInput {
-  language: '英文' | '日文'
+  language: TaskLanguage
   exam: string
   examLevel: string
   /** 要補完的字（來自內建字表）；留空表示請 AI 直接產生新字 */

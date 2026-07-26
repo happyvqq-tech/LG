@@ -1,7 +1,9 @@
 // 對話角色 system prompt（CLAUDE.md 6.2，變數以模板注入）
 
+import type { TaskLanguage } from '../types'
+
 export interface DialogPartnerInput {
-  language: '英文' | '日文'
+  language: TaskLanguage
   roleSetup: string
   goal: string
 }

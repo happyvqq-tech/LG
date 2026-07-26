@@ -11,7 +11,7 @@ import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
 import TodayDashboard from '../components/TodayDashboard'
 import AppVersion from '../components/AppVersion'
-import { LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson } from '../lib/types'
+import { isTaskLanguage, LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson, type TaskLanguage } from '../lib/types'
 
 function pickRandom<T>(list: T[], count: number): T[] {
   const copy = [...list]
@@ -26,10 +26,10 @@ export default function TaskHome() {
   const navigate = useNavigate()
   const { profile, refreshProfile } = useProfile()
   const learnable = useMemo(
-    () => (profile?.languages ?? []).filter((l): l is '英文' | '日文' => l === '英文' || l === '日文'),
+    () => (profile?.languages ?? []).filter(isTaskLanguage),
     [profile],
   )
-  const [language, setLanguage] = useState<'英文' | '日文'>(learnable[0] ?? '英文')
+  const [language, setLanguage] = useState<TaskLanguage>(learnable[0] ?? '英文')
   const [task, setTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)

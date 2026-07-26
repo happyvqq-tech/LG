@@ -18,7 +18,15 @@ import {
   type Scenario,
 } from '../lib/types'
 
-const ALL_LANGUAGES: Language[] = ['英文', '日文', '台語', '古文']
+const ALL_LANGUAGES: Language[] = ['英文', '日文', '韓文', '台語', '古文']
+
+/**
+ * 尚未實作的語言：選了也不會有任何學習內容，所以明確標示出來，
+ * 不要留一個看起來能選、選了卻什麼都沒有的選項。
+ * 台語卡在發音來源——瀏覽器沒有台語語音，需要另外的音檔或付費 TTS
+ * （CLAUDE.md 第 10 節：雅婷需使用者明確同意才實作）。
+ */
+const UNAVAILABLE_LANGUAGES: Language[] = ['台語']
 
 function planSummary(plan: DailyPlan | null): string | null {
   if (!plan || plan.days.length === 0) return null
@@ -278,18 +286,30 @@ function ProfileDrawer({
 
         <p className="mt-5 text-sm font-semibold text-slate-600">語言（可複選）</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {ALL_LANGUAGES.map((lang) => (
-            <button
-              key={lang}
-              onClick={() => setLanguages(toggle(languages, lang))}
-              className={`rounded-full px-5 py-2.5 font-semibold transition ${
-                languages.includes(lang) ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {lang}
-            </button>
-          ))}
+          {ALL_LANGUAGES.map((lang) => {
+            const unavailable = UNAVAILABLE_LANGUAGES.includes(lang)
+            return (
+              <button
+                key={lang}
+                onClick={() => !unavailable && setLanguages(toggle(languages, lang))}
+                disabled={unavailable}
+                className={`rounded-full px-5 py-2.5 font-semibold transition ${
+                  unavailable
+                    ? 'cursor-not-allowed bg-slate-50 text-slate-300'
+                    : languages.includes(lang)
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {lang}
+                {unavailable && <span className="ml-1 text-xs">（尚未開放）</span>}
+              </button>
+            )
+          })}
         </div>
+        <p className="mt-1.5 text-xs text-slate-400">
+          英文／日文／韓文有完整的聽說讀寫任務；古文有專屬的句讀、字詞、翻譯模組
+        </p>
 
         <p className="mt-5 text-sm font-semibold text-slate-600">程度（滑過或點選看說明）</p>
         <div className="mt-2">

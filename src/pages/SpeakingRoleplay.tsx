@@ -9,6 +9,7 @@ import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import VoiceChat from '../components/VoiceChat'
 import { useSpeechRate } from '../lib/useSpeechRate'
+import { asTaskLanguage } from '../lib/types'
 
 export default function SpeakingRoleplay() {
   const navigate = useNavigate()
@@ -18,7 +19,7 @@ export default function SpeakingRoleplay() {
   const systemPrompt = useMemo(() => {
     if (!task) return ''
     return dialogPartnerSystemPrompt({
-      language: task.language === '日文' ? '日文' : '英文',
+      language: asTaskLanguage(task.language),
       roleSetup: task.task_json.speaking_role_setup,
       goal: task.task_json.speaking_goal,
     })

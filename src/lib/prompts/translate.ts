@@ -2,8 +2,10 @@
 // 結果存進 task_json 快取，之後不再重複呼叫（見 lib/translationService.ts）
 // 沿用批改回饋器（grader/sonnet）模組，輸出 JSON
 
+import type { TaskLanguage } from '../types'
+
 export interface TranslateInput {
-  language: '英文' | '日文'
+  language: TaskLanguage
   sentences: string[]
 }
 

@@ -9,6 +9,7 @@ import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import VoiceChat from '../components/VoiceChat'
 import { useSpeechRate } from '../lib/useSpeechRate'
+import { asTaskLanguage } from '../lib/types'
 
 export default function SpeakingDiscuss() {
   const navigate = useNavigate()
@@ -18,7 +19,7 @@ export default function SpeakingDiscuss() {
   const systemPrompt = useMemo(() => {
     if (!task) return ''
     return discussPartnerSystemPrompt({
-      language: task.language === '日文' ? '日文' : '英文',
+      language: asTaskLanguage(task.language),
       scenarioTitle: task.task_json.scenario_title,
       passage: task.task_json.listening_script,
     })

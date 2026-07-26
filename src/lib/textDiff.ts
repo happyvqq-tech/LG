@@ -8,6 +8,8 @@ export interface DiffToken {
 }
 
 function tokenize(text: string, language: Language): string[] {
+  // 日文沒有分詞空白，只能逐字比對；韓文有分寫（띄어쓰기），
+  // 跟英文一樣用空白切詞就對了
   if (language === '日文') return Array.from(text)
   return text.split(/(\s+)/).filter((t) => t.length > 0)
 }

@@ -1,9 +1,9 @@
 // 任務生成器 system prompt（CLAUDE.md 6.1，變數以模板注入）
 
-import type { ErrorRecord, GrammarPoint, Level, TaskJson } from '../types'
+import type { ErrorRecord, GrammarPoint, Level, TaskJson, TaskLanguage } from '../types'
 
 export interface TaskGeneratorInput {
-  language: '英文' | '日文'
+  language: TaskLanguage
   level: Level
   scenario: string
   grammarPoints: GrammarPoint[]

@@ -12,6 +12,7 @@ import {
 import PracticeQuiz from '../components/PracticeQuiz'
 import { harvestFromTask } from '../lib/vocabService'
 import { logActivity } from '../lib/streakService'
+import { asTaskLanguage } from '../lib/types'
 import type { DrillQuestion } from '../lib/types'
 
 /** 用字類錯誤才值得進單字庫（時態、冠詞這類是文法問題，歸錯誤庫管） */
@@ -68,7 +69,7 @@ export default function Feedback() {
     setPracticeLoading(true)
     setPracticeError('')
     try {
-      const language = task.language === '日文' ? '日文' : '英文'
+      const language = asTaskLanguage(task.language)
       const result = await callClaudeJSON<ReviewPracticeResult>(
         {
           module: 'grader',

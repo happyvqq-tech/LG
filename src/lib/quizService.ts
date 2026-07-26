@@ -9,6 +9,7 @@ import {
 } from './prompts/quizGenerator'
 import { judgeAnswer, scoreFor, type Verdict } from './quizGrading'
 import { nextDueDate, schedule, toDateString, MAX_STAGE } from './srs'
+import { asTaskLanguage } from './types'
 import type { Language, QuizDetail, QuizRecord, VocabCard } from './types'
 
 export const QUIZ_SIZE = 10
@@ -82,7 +83,7 @@ export async function generateQuiz(
     {
       module: 'grader',
       system: quizGeneratorSystemPrompt({
-        language: language === '日文' ? '日文' : '英文',
+        language: asTaskLanguage(language),
         exam,
         examLevel,
         cards,

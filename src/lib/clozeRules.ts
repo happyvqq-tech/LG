@@ -33,11 +33,17 @@ const EN_STOPWORDS = new Set([
 ])
 
 function wordRegexFor(language: Language): RegExp {
-  return language === '日文' ? /[一-鿿々]+/g : /[A-Za-z]+(?:'[A-Za-z]+)?/g
+  if (language === '日文') return /[一-鿿々]+/g
+  // 韓文有分寫（띄어쓰기），但助詞是黏在詞後面的，所以整個諺文詞節一起挖，
+  // 不要試著把助詞切開——切錯反而讓題目不成立
+  if (language === '韓文') return /[가-힣]+/g
+  return /[A-Za-z]+(?:'[A-Za-z]+)?/g
 }
 
 function isCandidate(word: string, language: Language): boolean {
   if (language === '日文') return word.length >= 2
+  // 韓文一個音節就是一個字，兩音節以上才有挖空的意義
+  if (language === '韓文') return word.length >= 2
   if (word.length < 4) return false
   return !EN_STOPWORDS.has(word.toLowerCase())
 }

@@ -25,6 +25,7 @@ const ACCENT_LABELS: Record<string, string> = {
   'en-hk': '香港',
   'en-ph': '菲律賓',
   'ja-jp': '日本',
+  'ko-kr': '韓國',
   'zh-tw': '台灣',
   'zh-cn': '中國',
   'zh-hk': '香港',

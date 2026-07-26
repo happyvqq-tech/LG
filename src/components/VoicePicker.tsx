@@ -13,6 +13,7 @@ import type { Language } from '../lib/types'
 const SAMPLE_TEXT: Record<Language, string> = {
   英文: "Hi! I'd like a large coffee and a croissant, please. How much is that?",
   日文: 'すみません、コーヒーを一つお願いします。おいくらですか。',
+  韓文: '안녕하세요. 커피 한 잔 주세요. 얼마예요?',
   台語: '你好，我欲買一杯咖啡。',
   古文: '山不在高，有仙則名。水不在深，有龍則靈。',
 }

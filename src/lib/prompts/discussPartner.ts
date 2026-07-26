@@ -2,10 +2,10 @@
 // 把重點講出來。跟 dialogPartner（CLAUDE.md 6.2 的情境角色扮演）不同——
 // 那個是演一個角色跟你拉鋸，這個是就文章內容討論，練的是「講得出重點」。
 
-import type { ChatMessage } from '../types'
+import type { ChatMessage, TaskLanguage } from '../types'
 
 export interface DiscussPartnerInput {
-  language: '英文' | '日文'
+  language: TaskLanguage
   scenarioTitle: string
   passage: string
 }

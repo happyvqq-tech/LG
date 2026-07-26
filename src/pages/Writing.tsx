@@ -8,6 +8,7 @@ import { updateTaskJson } from '../lib/taskService'
 import { diffTokens } from '../lib/textDiff'
 import DrillModal from '../components/DrillModal'
 import TaskNav from '../components/TaskNav'
+import { asTaskLanguage } from '../lib/types'
 import type { GraderError, GraderResult } from '../lib/types'
 
 function countUnits(text: string, language: string): number {
@@ -43,7 +44,7 @@ export default function Writing() {
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
 
-  const language = task.language === '日文' ? '日文' : '英文'
+  const language = asTaskLanguage(task.language)
   const unitName = language === '日文' ? '字' : '字（words）'
   const units = countUnits(answer, language)
 

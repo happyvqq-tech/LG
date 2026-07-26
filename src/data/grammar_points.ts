@@ -1,8 +1,10 @@
-// 高中核心文法點種子清單（與 supabase/seed.sql 同源，由腳本產生）
-// 英文 60 個（A2-C1）、日文 30 個（N4-N2）
+// 高中核心文法點種子清單（與 supabase/seed.sql 同源）
+// 英文 60 個（A2-C1）、日文 30 個（N4-N2）、韓文 30 個（TOPIK 1-5）
+
+import type { TaskLanguage } from '../lib/types'
 
 export interface GrammarPointSeed {
-  language: '英文' | '日文'
+  language: TaskLanguage
   name: string
   level: string
   description: string
@@ -100,4 +102,36 @@ export const GRAMMAR_POINT_SEEDS: GrammarPointSeed[] = [
   { language: '日文', name: "〜に違いない／〜かねない", level: 'N2', description: "強烈肯定推測與擔憂可能發生負面結果的推測。", in_rotation: false },
   { language: '日文', name: "〜ものだ／〜ことだ", level: 'N2', description: "一般常理感慨（ものだ）與個別忠告（ことだ）的區分。", in_rotation: false },
   { language: '日文', name: "は與が的使い分け", level: 'N3', description: "主題「は」與主格「が」：舊訊息對新訊息、對比對排他。", in_rotation: false },
+
+  // ---------- 韓文（TOPIK 分級） ----------
+  { language: '韓文', name: "主格助詞 이/가 與主題助詞 은/는", level: 'TOPIK1', description: "新訊息用이/가，主題與對比用은/는——韓語學習最早也最久的一道坎。", in_rotation: false },
+  { language: '韓文', name: "受格助詞 을/를", level: 'TOPIK1', description: "標記動作對象，收尾音有無決定用을還是를。", in_rotation: false },
+  { language: '韓文', name: "場所助詞 에 與 에서", level: 'TOPIK1', description: "에表存在地點與方向，에서表動作發生地與出發點。", in_rotation: false },
+  { language: '韓文', name: "敬語階：해요體與합니다體", level: 'TOPIK1', description: "日常口語用해요體，正式場合用합니다體，混用會顯得突兀。", in_rotation: false },
+  { language: '韓文', name: "半語（반말）的使用時機", level: 'TOPIK2', description: "對平輩晚輩才用，對長輩用會失禮——語尾去掉요即成。", in_rotation: false },
+  { language: '韓文', name: "動詞現在式 아/어요 變化", level: 'TOPIK1', description: "依語幹母音陽性陰性決定接아요還是어요，含縮約規則。", in_rotation: false },
+  { language: '韓文', name: "過去式 았/었어요", level: 'TOPIK1', description: "過去時制的基本變化，規則同現在式的陽陰性判斷。", in_rotation: false },
+  { language: '韓文', name: "未來與推測 (으)ㄹ 거예요", level: 'TOPIK1', description: "表達計畫與推測，收尾音有無決定是否加으。", in_rotation: false },
+  { language: '韓文', name: "不規則變化：ㅂ不規則", level: 'TOPIK2', description: "덥다→더워요這類語幹ㅂ變우的變化，初學最常錯。", in_rotation: false },
+  { language: '韓文', name: "不規則變化：ㄷ／ㅅ／르 不規則", level: 'TOPIK2', description: "듣다→들어요、짓다→지어요、모르다→몰라요的各自規則。", in_rotation: false },
+  { language: '韓文', name: "連結語尾 고 與 아/어서", level: 'TOPIK1', description: "고單純並列，아/어서表先後順序或原因，兩者不可互換。", in_rotation: false },
+  { language: '韓文', name: "原因表達 아/어서 與 (으)니까", level: 'TOPIK2', description: "니까可接命令勸誘，아/어서不行——這是關鍵區別。", in_rotation: false },
+  { language: '韓文', name: "逆接 지만 與 (으)ㄴ/는데", level: 'TOPIK2', description: "지만單純轉折，는데帶背景說明與語氣緩和。", in_rotation: false },
+  { language: '韓文', name: "條件 (으)면", level: 'TOPIK1', description: "假設與條件「如果…就…」的基本形式。", in_rotation: false },
+  { language: '韓文', name: "能力可否 (으)ㄹ 수 있다/없다", level: 'TOPIK1', description: "表達會不會、能不能做某事。", in_rotation: false },
+  { language: '韓文', name: "義務與許可 아/어야 되다、아/어도 되다", level: 'TOPIK2', description: "必須做與可以做的表達，以及否定的안 되다。", in_rotation: false },
+  { language: '韓文', name: "願望 고 싶다 與 (으)면 좋겠다", level: 'TOPIK2', description: "想做某事與希望某情況發生的差別。", in_rotation: false },
+  { language: '韓文', name: "尊敬語尾 (으)시", level: 'TOPIK2', description: "抬高主語的敬語插入語尾，含드시다、계시다等特殊尊敬動詞。", in_rotation: false },
+  { language: '韓文', name: "謙讓表達 드리다、뵙다", level: 'TOPIK3', description: "降低自己以表尊敬，與尊敬語尾方向相反不可混淆。", in_rotation: false },
+  { language: '韓文', name: "冠形詞形語尾 (으)ㄴ／는／(으)ㄹ", level: 'TOPIK2', description: "動詞修飾名詞時依過去/現在/未來選擇不同語尾。", in_rotation: false },
+  { language: '韓文', name: "間接引用 다고／냐고／자고／라고 하다", level: 'TOPIK3', description: "依原句是陳述/疑問/勸誘/命令選擇不同引用形式。", in_rotation: false },
+  { language: '韓文', name: "經驗 (으)ㄴ 적이 있다/없다", level: 'TOPIK2', description: "表達曾經做過或沒做過某事。", in_rotation: false },
+  { language: '韓文', name: "進行與狀態持續 고 있다、아/어 있다", level: 'TOPIK2', description: "고 있다是動作進行，아/어 있다是結果狀態持續。", in_rotation: false },
+  { language: '韓文', name: "被動與使動", level: 'TOPIK3', description: "이/히/리/기被動使動接尾詞，以及아/어지다的被動用法。", in_rotation: false },
+  { language: '韓文', name: "推測 (으)ㄴ/는 것 같다", level: 'TOPIK2', description: "根據觀察做出的推測，語氣比斷定委婉。", in_rotation: false },
+  { language: '韓文', name: "計畫與意圖 (으)려고 하다、기로 하다", level: 'TOPIK3', description: "打算做與決定做的差別。", in_rotation: false },
+  { language: '韓文', name: "程度與比較 보다、만큼、처럼", level: 'TOPIK3', description: "比較對象、程度相當、樣態比喻的三種用法。", in_rotation: false },
+  { language: '韓文', name: "名詞化 기、(으)ㅁ、는 것", level: 'TOPIK3', description: "把動詞句變成名詞的三種方式與各自搭配習慣。", in_rotation: false },
+  { language: '韓文', name: "讓步 아/어도、더라도", level: 'TOPIK4', description: "「就算…也…」的讓步表達，더라도語氣更強。", in_rotation: false },
+  { language: '韓文', name: "漢字語與固有語的語感差異", level: 'TOPIK5', description: "同義的漢字詞與固有詞在正式度與搭配上的差別，中文母語者最容易誤用。", in_rotation: false },
 ]

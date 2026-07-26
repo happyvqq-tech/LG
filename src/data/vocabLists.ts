@@ -4,11 +4,13 @@
 // 英文以 CEFR 難度分帶，各考試等級對應到帶 + 該考試專屬字彙；
 // 這是詞彙難度的真實運作方式，也避免同一個字在多份表裡重複維護。
 
+import type { TaskLanguage } from '../lib/types'
+
 export interface VocabSeed {
   w: string
   zh: string
   pos: string
-  /** 日文：假名讀音 */
+  /** 日文：假名讀音；韓文：漢字語對應的漢字（沒有就留空） */
   reading?: string
 }
 
@@ -414,13 +416,115 @@ const JP_N1: VocabSeed[] = [
   { w: 'もっぱら', reading: 'もっぱら', zh: '專門地', pos: 'adv.' },
 ]
 
+
+// ---------- 韓文：TOPIK 難度帶 ----------
+
+const KO_BEGINNER: VocabSeed[] = [
+  { w: '가다', zh: '去', pos: 'v.' },
+  { w: '오다', zh: '來', pos: 'v.' },
+  { w: '먹다', zh: '吃', pos: 'v.' },
+  { w: '마시다', zh: '喝', pos: 'v.' },
+  { w: '보다', zh: '看', pos: 'v.' },
+  { w: '듣다', zh: '聽', pos: 'v.' },
+  { w: '읽다', zh: '讀', pos: 'v.' },
+  { w: '쓰다', zh: '寫；使用', pos: 'v.' },
+  { w: '말하다', zh: '說', pos: 'v.' },
+  { w: '만나다', zh: '見面', pos: 'v.' },
+  { w: '사다', zh: '買', pos: 'v.' },
+  { w: '주다', zh: '給', pos: 'v.' },
+  { w: '받다', zh: '收到', pos: 'v.' },
+  { w: '살다', zh: '住；生活', pos: 'v.' },
+  { w: '일하다', zh: '工作', pos: 'v.' },
+  { w: '공부하다', zh: '讀書', pos: 'v.', reading: '工夫하다' },
+  { w: '좋다', zh: '好', pos: 'adj.' },
+  { w: '나쁘다', zh: '壞', pos: 'adj.' },
+  { w: '크다', zh: '大', pos: 'adj.' },
+  { w: '작다', zh: '小', pos: 'adj.' },
+  { w: '많다', zh: '多', pos: 'adj.' },
+  { w: '적다', zh: '少', pos: 'adj.' },
+  { w: '비싸다', zh: '貴', pos: 'adj.' },
+  { w: '싸다', zh: '便宜', pos: 'adj.' },
+  { w: '시간', zh: '時間', pos: 'n.', reading: '時間' },
+  { w: '친구', zh: '朋友', pos: 'n.', reading: '親舊' },
+  { w: '학교', zh: '學校', pos: 'n.', reading: '學校' },
+  { w: '집', zh: '家', pos: 'n.' },
+  { w: '음식', zh: '食物', pos: 'n.', reading: '飲食' },
+  { w: '오늘', zh: '今天', pos: 'n.' },
+]
+
+const KO_INTERMEDIATE: VocabSeed[] = [
+  { w: '준비하다', zh: '準備', pos: 'v.', reading: '準備하다' },
+  { w: '결정하다', zh: '決定', pos: 'v.', reading: '決定하다' },
+  { w: '설명하다', zh: '說明', pos: 'v.', reading: '說明하다' },
+  { w: '소개하다', zh: '介紹', pos: 'v.', reading: '紹介하다' },
+  { w: '약속하다', zh: '約定', pos: 'v.', reading: '約束하다' },
+  { w: '이해하다', zh: '理解', pos: 'v.', reading: '理解하다' },
+  { w: '기억하다', zh: '記得', pos: 'v.', reading: '記憶하다' },
+  { w: '잊어버리다', zh: '忘記', pos: 'v.' },
+  { w: '바꾸다', zh: '換；改變', pos: 'v.' },
+  { w: '고치다', zh: '修理；改正', pos: 'v.' },
+  { w: '참다', zh: '忍耐', pos: 'v.' },
+  { w: '걱정하다', zh: '擔心', pos: 'v.' },
+  { w: '기대하다', zh: '期待', pos: 'v.', reading: '期待하다' },
+  { w: '실수하다', zh: '失誤', pos: 'v.', reading: '失手하다' },
+  { w: '복잡하다', zh: '複雜', pos: 'adj.', reading: '複雜하다' },
+  { w: '간단하다', zh: '簡單', pos: 'adj.', reading: '簡單하다' },
+  { w: '중요하다', zh: '重要', pos: 'adj.', reading: '重要하다' },
+  { w: '필요하다', zh: '需要', pos: 'adj.', reading: '必要하다' },
+  { w: '편리하다', zh: '方便', pos: 'adj.', reading: '便利하다' },
+  { w: '불편하다', zh: '不方便', pos: 'adj.', reading: '不便하다' },
+  { w: '경험', zh: '經驗', pos: 'n.', reading: '經驗' },
+  { w: '기회', zh: '機會', pos: 'n.', reading: '機會' },
+  { w: '방법', zh: '方法', pos: 'n.', reading: '方法' },
+  { w: '이유', zh: '理由', pos: 'n.', reading: '理由' },
+  { w: '결과', zh: '結果', pos: 'n.', reading: '結果' },
+  { w: '문제', zh: '問題', pos: 'n.', reading: '問題' },
+  { w: '관계', zh: '關係', pos: 'n.', reading: '關係' },
+  { w: '분위기', zh: '氣氛', pos: 'n.', reading: '雰圍氣' },
+  { w: '성격', zh: '個性', pos: 'n.', reading: '性格' },
+  { w: '취미', zh: '興趣', pos: 'n.', reading: '趣味' },
+]
+
+const KO_ADVANCED: VocabSeed[] = [
+  { w: '판단하다', zh: '判斷', pos: 'v.', reading: '判斷하다' },
+  { w: '분석하다', zh: '分析', pos: 'v.', reading: '分析하다' },
+  { w: '평가하다', zh: '評價', pos: 'v.', reading: '評價하다' },
+  { w: '주장하다', zh: '主張', pos: 'v.', reading: '主張하다' },
+  { w: '지적하다', zh: '指出', pos: 'v.', reading: '指摘하다' },
+  { w: '강조하다', zh: '強調', pos: 'v.', reading: '強調하다' },
+  { w: '반영하다', zh: '反映', pos: 'v.', reading: '反映하다' },
+  { w: '극복하다', zh: '克服', pos: 'v.', reading: '克服하다' },
+  { w: '추진하다', zh: '推動', pos: 'v.', reading: '推進하다' },
+  { w: '실현하다', zh: '實現', pos: 'v.', reading: '實現하다' },
+  { w: '뚜렷하다', zh: '明顯；鮮明', pos: 'adj.' },
+  { w: '심각하다', zh: '嚴重', pos: 'adj.', reading: '深刻하다' },
+  { w: '적절하다', zh: '適當', pos: 'adj.', reading: '適切하다' },
+  { w: '뛰어나다', zh: '出色', pos: 'adj.' },
+  { w: '엄격하다', zh: '嚴格', pos: 'adj.', reading: '嚴格하다' },
+  { w: '현상', zh: '現象', pos: 'n.', reading: '現象' },
+  { w: '경향', zh: '傾向', pos: 'n.', reading: '傾向' },
+  { w: '요인', zh: '因素', pos: 'n.', reading: '要因' },
+  { w: '대책', zh: '對策', pos: 'n.', reading: '對策' },
+  { w: '기준', zh: '標準', pos: 'n.', reading: '基準' },
+  { w: '근거', zh: '根據', pos: 'n.', reading: '根據' },
+  { w: '측면', zh: '層面', pos: 'n.', reading: '側面' },
+  { w: '갈등', zh: '衝突；矛盾', pos: 'n.', reading: '葛藤' },
+  { w: '영향력', zh: '影響力', pos: 'n.', reading: '影響力' },
+  { w: '가치관', zh: '價值觀', pos: 'n.', reading: '價値觀' },
+  { w: '비판', zh: '批判', pos: 'n.', reading: '批判' },
+  { w: '전망', zh: '展望；前景', pos: 'n.', reading: '展望' },
+  { w: '효율', zh: '效率', pos: 'n.', reading: '效率' },
+  { w: '유지', zh: '維持', pos: 'n.', reading: '維持' },
+  { w: '개선', zh: '改善', pos: 'n.', reading: '改善' },
+]
+
 // ---------- 考試 / 等級 定義 ----------
 
-export type ExamSystem = 'TOEIC' | 'TOEFL' | 'IELTS' | 'Cambridge' | 'JLPT'
+export type ExamSystem = 'TOEIC' | 'TOEFL' | 'IELTS' | 'Cambridge' | 'JLPT' | 'TOPIK'
 
 export interface ExamOption {
   exam: ExamSystem
-  language: '英文' | '日文'
+  language: TaskLanguage
   /** 該考試底下的等級（由易到難） */
   levels: Array<{ id: string; label: string; hint: string }>
 }
@@ -474,6 +578,15 @@ export const EXAM_OPTIONS: ExamOption[] = [
       { id: 'N1', label: 'N1', hint: '抽象與正式文體' },
     ],
   },
+  {
+    exam: 'TOPIK',
+    language: '韓文',
+    levels: [
+      { id: '1-2', label: 'TOPIK 1-2', hint: '基礎生活單字' },
+      { id: '3-4', label: 'TOPIK 3-4', hint: '日常與社會話題' },
+      { id: '5-6', label: 'TOPIK 5-6', hint: '抽象議題與正式文體' },
+    ],
+  },
 ]
 
 /** 考試等級 → 內建字表（CEFR 難度帶 + 該考試專屬字） */
@@ -496,12 +609,17 @@ const LEVEL_TO_SEEDS: Record<string, VocabSeed[]> = {
   'JLPT:N3': JP_N3,
   'JLPT:N2': JP_N2,
   'JLPT:N1': JP_N1,
+  'TOPIK:1-2': KO_BEGINNER,
+  'TOPIK:3-4': KO_INTERMEDIATE,
+  'TOPIK:5-6': KO_ADVANCED,
 }
 
 export function seedsFor(exam: ExamSystem, level: string): VocabSeed[] {
   return LEVEL_TO_SEEDS[`${exam}:${level}`] ?? []
 }
 
-export function examLanguage(exam: ExamSystem): '英文' | '日文' {
-  return exam === 'JLPT' ? '日文' : '英文'
+export function examLanguage(exam: ExamSystem): TaskLanguage {
+  if (exam === 'JLPT') return '日文'
+  if (exam === 'TOPIK') return '韓文'
+  return '英文'
 }

@@ -15,6 +15,7 @@
    - 貼上 `supabase/migration-004.sql` 全文 → Run（每日測驗成績 vocab_quizzes 表）
    - 貼上 `supabase/migration-005.sql` 全文 → Run（古文進度 classical_progress 表）
    - 貼上 `supabase/migration-006.sql` 全文 → Run（連續天數 activity_log、虛詞專練 particle_cards 表）
+   - 貼上 `supabase/migration-007.sql` 全文 → Run（韓文文法點種子；沒跑的話韓文任務生成會失敗）
      ⚠️ 已建過資料庫的人這幾段也要跑，否則會出現「column / table does not exist」
 
 > 古文原文（《古文觀止》222 篇）不進資料庫，隨程式動態載入，第一次進古文頁才下載約 190KB，

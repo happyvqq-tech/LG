@@ -3,12 +3,12 @@
 // 關鍵設計：句子必須是新的，不能沿用單字卡上那句例句。
 // 沿用的話測到的是「記不記得那句話」，不是「會不會用這個字」。
 
-import type { VocabCard } from '../types'
+import type { TaskLanguage, VocabCard } from '../types'
 
 export const BLANK = '___'
 
 export interface QuizGenInput {
-  language: '英文' | '日文'
+  language: TaskLanguage
   exam: string
   examLevel: string
   cards: VocabCard[]

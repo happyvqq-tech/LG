@@ -1,10 +1,11 @@
 // 覆盤加練：根據本次錯誤生成「類似題」，換情境但考同一個規則
 // 沿用批改回饋器（sonnet）模組，輸出 JSON
 
-import type { DrillQuestion, GraderError } from '../types'
+import type { DrillQuestion, GraderError, TaskLanguage } from '../types'
 
 export interface ReviewPracticeInput {
-  language: '英文' | '日文' | '古文'
+  /** 錯誤庫複習：任務語言之外，古文也共用這支 prompt */
+  language: TaskLanguage | '古文'
   errors: GraderError[]
 }
 

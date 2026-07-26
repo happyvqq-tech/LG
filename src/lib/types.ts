@@ -1,6 +1,26 @@
 // 對應 supabase/schema.sql 的資料型別與任務 JSON 結構
 
-export type Language = '英文' | '日文' | '台語' | '古文'
+export type Language = '英文' | '日文' | '韓文' | '台語' | '古文'
+
+/**
+ * 走完整任務循環（聽→讀→說→寫）的語言。
+ * 古文有自己的模組（句讀/字詞/翻譯），台語尚未實作，兩者都不走這條路。
+ */
+export type TaskLanguage = '英文' | '日文' | '韓文'
+
+export const TASK_LANGUAGES: TaskLanguage[] = ['英文', '日文', '韓文']
+
+export function isTaskLanguage(lang: Language): lang is TaskLanguage {
+  return (TASK_LANGUAGES as Language[]).includes(lang)
+}
+
+/**
+ * 送進 prompt 前把語言收斂成任務語言。
+ * 古文／台語不該走到這裡（它們有自己的模組），真的走到就退回英文避免壞掉。
+ */
+export function asTaskLanguage(lang: Language): TaskLanguage {
+  return isTaskLanguage(lang) ? lang : '英文'
+}
 export type Level = 'A2' | 'B1' | 'B2' | 'C1'
 export type Scenario = '校園' | '日常' | '旅遊' | '職場' | '新聞時事' | '科技'
 
