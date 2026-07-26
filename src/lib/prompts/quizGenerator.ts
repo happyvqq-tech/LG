@@ -36,18 +36,20 @@ ${list}
 6. 每題附 hint：不透露答案，只點出「這裡要填的是什麼概念」（例如「表示『正式採用並執行』的動詞」）
 7. ${
     // 日文與韓文的用言在句子裡一定要活用，硬要求「原形填進去」會逼出不自然
-    // 甚至不合文法的句子，所以這兩種語言改成以辭書形／기본형 為答案基準
+    // 甚至不合文法的句子，所以這兩種語言改成以辭書形／기본형 為答案基準，
+    // 但活用後才是填進句子裡的實際文字——這就是為什麼下面另外要求 answer_surface
     input.language === '日文'
-      ? '句子用丁寧體；答案若為動詞請以辭書形為準'
+      ? '句子用丁寧體；answer_surface 請給活用後實際要填入的形式（例如辭書形是「確認する」，句子需要て形時 answer_surface 就填「確認して」）'
       : input.language === '韓文'
-        ? '句子用해요體；答案若為用言（動詞／形容詞）請以기본형（-다 結尾的基本形）為準，挖空處填入活用後的形式也算對'
-        : '答案以原形為準；若句子文法上需要變化形，請調整句子讓原形能直接填入'
+        ? '句子用해요體；answer_surface 請給활용後實際要填入的形式（例如기본형是「심각하다」，句子需要해요體時 answer_surface 就填「심각해요」）'
+        : '答案以原形為準；若句子文法上需要變化形，請調整句子讓原形能直接填入，此時 answer_surface 與 word 相同'
   }
+8. answer_surface 是唯一用來核對使用者作答的欄位，必須是真的能讓 ${BLANK} 處讀起來通順的那個文字——不是辭書形/기본형的話就不要跟 word 寫一樣的
 
 只輸出 JSON，不加任何前言、不用 markdown 圍欄：
 {
   "questions": [
-    {"word":"對應的單字","sentence":"含一個 ${BLANK} 的句子","sentence_zh":"整句中文翻譯","hint":"不透露答案的提示"}
+    {"word":"對應的單字","sentence":"含一個 ${BLANK} 的句子","sentence_zh":"整句中文翻譯","hint":"不透露答案的提示","answer_surface":"填入 ${BLANK} 處的實際文字（活用/敬語變化後的形式；不需要變化的語言就等於 word）"}
   ]
 }`
 }
@@ -57,6 +59,8 @@ export interface QuizQuestionRaw {
   sentence: string
   sentence_zh: string
   hint: string
+  /** 填入 ${BLANK} 處的實際文字（日韓是活用/敬語變化後的形式，其他語言等於 word） */
+  answer_surface: string
 }
 
 export interface QuizGenResult {
@@ -70,27 +74,37 @@ export function isQuizGenResult(v: unknown): v is QuizGenResult {
   return o.questions.every((q) => {
     if (typeof q !== 'object' || q === null) return false
     const item = q as Record<string, unknown>
-    return typeof item.word === 'string' && typeof item.sentence === 'string'
+    return (
+      typeof item.word === 'string' &&
+      typeof item.sentence === 'string' &&
+      typeof item.answer_surface === 'string' &&
+      item.answer_surface.trim() !== ''
+    )
   })
 }
 
 /**
  * 修掉 AI 可能犯的兩個錯：句子沒有空格、或句子裡直接寫出答案。
+ * 日韓的答案是活用後的 answerSurface，跟辭書形 word 常常不同兩個字串，
+ * 兩個都要檢查洩題，只檢查 word 會漏掉「句子裡直接寫出活用形」這種洩漏。
  * 回傳 null 代表這題無法補救，呼叫端應丟棄。
  */
-export function sanitizeSentence(sentence: string, word: string): string | null {
+export function sanitizeSentence(sentence: string, word: string, answerSurface?: string): string | null {
   let s = String(sentence ?? '').trim()
   if (s === '') return null
 
   // 統一各種底線寫法為標準空格標記
   s = s.replace(/_{2,}|＿{2,}/g, BLANK)
 
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // 答案外洩時就地挖空（連同常見變化形字尾一起吃掉）
-  const leak = new RegExp(`\\b${escaped}(s|es|ed|ing|d)?\\b`, 'gi')
-  if (leak.test(s)) s = s.replace(leak, BLANK)
-  // 非英數語言沒有 \b 可用，直接比對字面
-  if (s.includes(word)) s = s.split(word).join(BLANK)
+  const forms = [word, ...(answerSurface && answerSurface !== word ? [answerSurface] : [])]
+  for (const form of forms) {
+    const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // 答案外洩時就地挖空（連同常見變化形字尾一起吃掉）
+    const leak = new RegExp(`\\b${escaped}(s|es|ed|ing|d)?\\b`, 'gi')
+    if (leak.test(s)) s = s.replace(leak, BLANK)
+    // 非英數語言沒有 \b 可用，直接比對字面
+    if (s.includes(form)) s = s.split(form).join(BLANK)
+  }
 
   const blanks = s.split(BLANK).length - 1
   if (blanks === 0) return null

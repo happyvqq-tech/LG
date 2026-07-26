@@ -144,7 +144,7 @@ export default function Writing() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl bg-white p-4 shadow">
               <p className="text-sm font-semibold text-slate-500">最小修改版</p>
-              <p className="mt-2 leading-relaxed">
+              <p className="mt-2 break-words leading-relaxed">
                 {diff.a.map((t, i) => (
                   <span key={i} className={t.changed ? 'rounded bg-amber-200' : ''}>
                     {t.text}
@@ -154,7 +154,7 @@ export default function Writing() {
             </div>
             <div className="rounded-2xl bg-white p-4 shadow">
               <p className="text-sm font-semibold text-slate-500">母語自然版</p>
-              <p className="mt-2 leading-relaxed">
+              <p className="mt-2 break-words leading-relaxed">
                 {diff.b.map((t, i) => (
                   <span key={i} className={t.changed ? 'rounded bg-sky-200' : ''}>
                     {t.text}

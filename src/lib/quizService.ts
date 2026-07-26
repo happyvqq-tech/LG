@@ -23,6 +23,12 @@ export interface QuizQuestion {
   sentence: string
   sentenceZh: string
   hint: string
+  /**
+   * 真正要核對的答案：日韓是句子裡活用/敬語變化後的形式，其他語言等於 card.word。
+   * 之前直接拿 card.word（辭書形/기본형）去核對，日韓文法正確的活用形答案
+   * 會被判「答錯」，還連帶把 SRS 排程當成真的忘記了（見複盤報告）。
+   */
+  answerSurface: string
 }
 
 function shuffle<T>(list: T[]): T[] {
@@ -102,7 +108,8 @@ export async function generateQuiz(
     const key = String(q.word ?? '').toLowerCase()
     const card = byWord.get(key)
     if (!card || used.has(key)) continue
-    const sentence = sanitizeSentence(q.sentence, card.word)
+    const answerSurface = String(q.answer_surface ?? '').trim() || card.word
+    const sentence = sanitizeSentence(q.sentence, card.word, answerSurface)
     if (!sentence) continue // 出壞的題目直接丟掉，不讓使用者遇到
     used.add(key)
     questions.push({
@@ -110,6 +117,7 @@ export async function generateQuiz(
       sentence,
       sentenceZh: String(q.sentence_zh ?? ''),
       hint: String(q.hint ?? ''),
+      answerSurface,
     })
   }
 
@@ -129,7 +137,9 @@ export function gradeAnswer(
   input: string,
   usedHint: boolean,
 ): GradedAnswer {
-  const verdict = judgeAnswer(input, question.card.word, question.card.reading)
+  // 跟 answerSurface（句子裡實際要填的活用形）核對，不是跟辭書形/기본형核對——
+  // 兩者常常是不同的字串，日韓文法正確的作答才不會被誤判答錯
+  const verdict = judgeAnswer(input, question.answerSurface, question.card.reading)
   return { question, input, verdict, usedHint, score: scoreFor(verdict, usedHint) }
 }
 

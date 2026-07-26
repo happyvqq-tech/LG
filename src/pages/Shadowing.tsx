@@ -9,6 +9,7 @@ import { logActivity } from '../lib/streakService'
 import { ensureListeningTranslation } from '../lib/translationService'
 import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
+import VoicePicker from '../components/VoicePicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
 
 type Phase = 'idle' | 'ai-reading' | 'recording' | 'scored'
@@ -32,6 +33,7 @@ export default function Shadowing() {
   const [showZh, setShowZh] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState('')
+  const [showVoicePicker, setShowVoicePicker] = useState(false)
 
   const recognizerRef = useRef<HoldToTalkRecognizer | null>(null)
   // 守衛用 ref 不用 phase state，理由同 Speaking.tsx 的 stopRecording：
@@ -280,6 +282,16 @@ export default function Shadowing() {
         </div>
 
         <button
+          onClick={() => {
+            stopSpeaking()
+            setShowVoicePicker(true)
+          }}
+          className="mt-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
+        >
+          🗣️ 換發音
+        </button>
+
+        <button
           onClick={() => void toggleRecording()}
           disabled={!hasHeardDemo && phase !== 'recording'}
           className={`mt-5 w-full select-none rounded-xl py-4 text-lg font-bold text-white transition disabled:opacity-40 ${
@@ -345,6 +357,10 @@ export default function Shadowing() {
           </div>
         )}
       </section>
+
+      {showVoicePicker && (
+        <VoicePicker language={lang} onClose={() => setShowVoicePicker(false)} />
+      )}
     </main>
   )
 }

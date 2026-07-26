@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import RequireProfile from './components/RequireProfile'
 import { TAIGI_ENABLED } from './lib/features'
 import MemberSelect from './pages/MemberSelect'
@@ -12,7 +12,6 @@ import SpeakingRoleplay from './pages/SpeakingRoleplay'
 import Shadowing from './pages/Shadowing'
 import Writing from './pages/Writing'
 import Feedback from './pages/Feedback'
-import GrammarDrill from './pages/GrammarDrill'
 import VocabHome from './pages/VocabHome'
 import VocabSession from './pages/VocabSession'
 import VocabList from './pages/VocabList'
@@ -44,7 +43,6 @@ export default function App() {
       <Route path="/shadowing" element={guarded(<Shadowing />)} />
       <Route path="/writing" element={guarded(<Writing />)} />
       <Route path="/feedback" element={guarded(<Feedback />)} />
-      <Route path="/grammar-drill" element={guarded(<GrammarDrill />)} />
       <Route path="/vocab" element={guarded(<VocabHome />)} />
       <Route path="/vocab/session" element={guarded(<VocabSession />)} />
       <Route path="/vocab/list" element={guarded(<VocabList />)} />
@@ -63,6 +61,9 @@ export default function App() {
       <Route path="/classical/:textId" element={guarded(<ClassicalRead />)} />
       <Route path="/error-review/:language" element={guarded(<ErrorReview />)} />
       <Route path="/weekly-report" element={guarded(<WeeklyReport />)} />
+      {/* 任何打不到的網址（含被 features.ts 關掉的 /taigi）都導回首頁，
+          不要讓 <Routes> 沒有匹配時預設渲染空內容，變成一片空白 */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

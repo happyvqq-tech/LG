@@ -233,7 +233,9 @@ export default function VocabQuiz() {
               </div>
 
               <div className="mt-2">
-                <SentenceWithBlank sentence={a.question.sentence} filled={a.question.card.word} />
+                {/* 填活用後的 answerSurface，不是辭書形/기본형的 card.word——
+                    句子需要活用時，填辭書形進去讀起來是不通的 */}
+                <SentenceWithBlank sentence={a.question.sentence} filled={a.question.answerSurface} />
               </div>
               {a.question.sentenceZh && (
                 <p className="mt-1 text-sm text-slate-500">{a.question.sentenceZh}</p>
@@ -246,7 +248,8 @@ export default function VocabQuiz() {
                     {a.input || '（空白）'}
                   </span>
                   <span className="mx-1 text-slate-400">→</span>
-                  <span className="font-semibold text-green-600">{a.question.card.word}</span>
+                  {/* 同上：這裡也要給活用後的正解，不是辭書形/기본형 */}
+                  <span className="font-semibold text-green-600">{a.question.answerSurface}</span>
                 </p>
               )}
               <p className="mt-1 text-sm text-slate-500">{a.question.card.meaning_zh}</p>

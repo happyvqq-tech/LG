@@ -112,7 +112,11 @@ export function downloadIcs(profile: Profile, plan: DailyPlan): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${profile.name}-學習提醒.ics`
+  // 檔名故意不放中文（連成員名字都不放）：實測這個環境的瀏覽器只要
+  // download 屬性帶非 ASCII 字元就會整個退化成沒有副檔名的「download」，
+  // 手機下載清單裡因此可能不會跳出「加入行事曆」的選項。中文情境還是
+  // 完整保留在行事曆事件本身的標題／說明裡，只有檔名改成純 ASCII。
+  a.download = 'lgl-study-plan.ics'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

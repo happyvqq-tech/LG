@@ -99,10 +99,17 @@ export default function ListeningCloze() {
   }
 
   if (rounds.length === 0) {
+    // 日文只挖漢字詞／片假名詞（見 clozeRules.ts 的說明），一段幾乎全平假名的
+    // 聽力稿不是「太短」，是漢字/外來語太少——訊息要說實話，不要誤導使用者
+    // 以為聽力稿有問題
+    const reason =
+      lang === '日文'
+        ? '這篇聽力稿的漢字或片假名詞太少，暫時無法自動挖空關鍵字。'
+        : '這篇聽力稿太短，找不到適合挖空的關鍵字。'
     return (
       <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
         <TaskNav current="listening" />
-        <p className="rounded-xl bg-amber-50 p-4 text-amber-700">這篇聽力稿太短，找不到適合挖空的關鍵字。</p>
+        <p className="rounded-xl bg-amber-50 p-4 text-amber-700">{reason}</p>
       </main>
     )
   }

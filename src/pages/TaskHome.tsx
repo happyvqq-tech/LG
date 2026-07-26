@@ -43,15 +43,23 @@ export default function TaskHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 成員可能只選了古文（沒有任何走聽說讀寫循環的語言），這種情況下完全
+  // 沒有「今日任務」這回事——之前 language 會默默 fallback 成英文，
+  // 底下還是會生成/讀取一個使用者從沒選過的英文任務，見複盤報告
+  const hasTaskLanguage = learnable.length > 0
+
   useEffect(() => {
-    if (!profile) return
+    if (!profile || !hasTaskLanguage) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setErrorMsg('')
     getTodayPendingTask(profile.id, language)
       .then(setTask)
       .catch((e: unknown) => setErrorMsg(`讀取今日任務失敗：${String((e as Error).message)}`))
       .finally(() => setLoading(false))
-  }, [profile, language])
+  }, [profile, language, hasTaskLanguage])
 
   async function generate() {
     if (!profile) return
@@ -173,6 +181,7 @@ export default function TaskHome() {
         </div>
       )}
 
+      {hasTaskLanguage && (
       <section className="mt-6">
         <h2 className="text-lg font-bold text-slate-700">今日任務</h2>
 
@@ -237,6 +246,7 @@ export default function TaskHome() {
           </div>
         )}
       </section>
+      )}
 
       <section className="mt-6 grid gap-3">
         <Link
@@ -285,22 +295,26 @@ export default function TaskHome() {
           <span className="text-slate-300">→</span>
         </Link>
 
-        <button
-          onClick={() => setShowErrorBank(true)}
-          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
-        >
-          <span className="flex items-center gap-3">
-            <span className="text-2xl">📚</span>
-            <span className="text-left">
-              <span className="block font-bold">錯誤庫</span>
-              <span className="block text-sm text-slate-500">學習中・驗證中・已攻克</span>
+        {/* 這顆按鈕開的是 `language`（走聽說讀寫循環那個語言）的錯誤庫，
+            只選古文的成員沒有這個語言可言——古文自己的錯誤庫在 /classical 裡有專屬入口 */}
+        {hasTaskLanguage && (
+          <button
+            onClick={() => setShowErrorBank(true)}
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">📚</span>
+              <span className="text-left">
+                <span className="block font-bold">錯誤庫</span>
+                <span className="block text-sm text-slate-500">學習中・驗證中・已攻克</span>
+              </span>
             </span>
-          </span>
-          <span className="text-slate-300">→</span>
-        </button>
+            <span className="text-slate-300">→</span>
+          </button>
+        )}
       </section>
 
-      {showErrorBank && (
+      {showErrorBank && hasTaskLanguage && (
         <ErrorBank profileId={profile.id} language={language} onClose={() => setShowErrorBank(false)} />
       )}
 

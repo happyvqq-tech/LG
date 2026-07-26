@@ -84,8 +84,9 @@ function isInflection(a: string, b: string): boolean {
   return false
 }
 
+/** 平假名/片假名/中日漢字/諺文——這些語言換一個字就可能是完全不同的詞 */
 function hasCJK(s: string): boolean {
-  return /[぀-ヿ㐀-䶿一-鿿]/.test(s)
+  return /[぀-ヿ㐀-䶿一-鿿가-힣]/.test(s)
 }
 
 /**
@@ -102,8 +103,9 @@ function isCloseSpelling(got: string, want: string): boolean {
 /**
  * 判定作答。
  * @param input 使用者輸入
- * @param answer 正確答案（單字本體）
- * @param reading 日文假名讀音；打假名也算對
+ * @param answer 正確答案（單字本體，或句子實際要填入的活用形）
+ * @param reading 日文假名讀音；打假名也算對。韓文現在傳的是羅馬字轉寫，
+ *   那是給人看的音標不是另一種可以拿來核對的書寫系統，下面刻意不對韓文套用
  */
 export function judgeAnswer(input: string, answer: string, reading = ''): Verdict {
   const got = normalize(input)
@@ -111,15 +113,17 @@ export function judgeAnswer(input: string, answer: string, reading = ''): Verdic
   if (got === '') return 'wrong'
   if (got === want) return 'correct'
 
-  // 日文：打漢字或假名都算對
+  // 打假名也算對——只對日文成立。韓文的 want 是諺文，reading 卻是羅馬字，
+  // 兩種完全不同的書寫系統，套用這條反而會把正確答案判錯
+  const isHangulAnswer = /[가-힣]/.test(want)
   const kana = normalize(reading)
-  if (kana !== '' && got === kana) return 'correct'
+  if (!isHangulAnswer && kana !== '' && got === kana) return 'correct'
 
-  // 日文/中文換一個字就可能是完全不同的詞，判定要比英文嚴格：
+  // 日文/韓文/中文換一個字就可能是完全不同的詞，判定要比英文嚴格：
   // 只有 4 字以上、且只差一個字、首字相同時才算「差一點」
   if (hasCJK(want) || hasCJK(got)) {
-    // 使用者打假名時就跟假名比，打漢字就跟漢字比
-    const isKanaInput = kana !== '' && !/[㐀-䶿一-鿿]/.test(got)
+    // 使用者打假名時就跟假名比，打漢字就跟漢字比——這個切換只對日文有意義
+    const isKanaInput = !isHangulAnswer && kana !== '' && !/[㐀-䶿一-鿿]/.test(got)
     const target = isKanaInput ? kana : want
     if (target.length >= 4 && got[0] === target[0] && levenshtein(got, target) === 1) {
       return 'close'

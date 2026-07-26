@@ -1,8 +1,0 @@
-export default function GrammarDrill() {
-  return (
-    <main className="mx-auto max-w-xl lg:max-w-3xl p-6">
-      <h1 className="text-2xl font-bold">GrammarDrill</h1>
-      <p className="mt-2 text-slate-500">頁面建置中（占位）</p>
-    </main>
-  )
-}
