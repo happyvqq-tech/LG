@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../lib/profileContext'
 import { fileToAvatarDataUrl } from '../lib/avatar'
+import { TAIGI_ENABLED } from '../lib/features'
 import { downloadIcs } from '../lib/ics'
 import Avatar from '../components/Avatar'
 import LevelPicker from '../components/LevelPicker'
@@ -21,11 +22,12 @@ import {
 const ALL_LANGUAGES: Language[] = ['英文', '日文', '韓文', '台語', '古文']
 
 /**
- * 尚未實作的語言：選了也不會有任何學習內容，所以明確標示出來，
+ * 目前不開放選擇的語言：選了也不會有學習內容，所以明確標示出來，
  * 不要留一個看起來能選、選了卻什麼都沒有的選項。
- * 目前全部語言都有內容了，這個清單留著是為了下次再加語言時有地方掛。
+ * 台語的程式與測試都完成了，只是還沒決定要不要用雅婷 TTS（見 TAIGI_MEMO.md），
+ * 開關在 lib/features.ts。
  */
-const UNAVAILABLE_LANGUAGES: Language[] = []
+const UNAVAILABLE_LANGUAGES: Language[] = TAIGI_ENABLED ? [] : ['台語']
 
 function planSummary(plan: DailyPlan | null): string | null {
   if (!plan || plan.days.length === 0) return null
@@ -301,13 +303,13 @@ function ProfileDrawer({
                 }`}
               >
                 {lang}
-                {unavailable && <span className="ml-1 text-xs">（尚未開放）</span>}
+                {unavailable && <span className="ml-1 text-xs">（暫未開放）</span>}
               </button>
             )
           })}
         </div>
         <p className="mt-1.5 text-xs text-slate-400">
-          英文／日文／韓文有完整的聽說讀寫任務；台語只有聽與說（跟讀）；古文有專屬的句讀、字詞、翻譯模組
+          英文／日文／韓文有完整的聽說讀寫任務；古文有專屬的句讀、字詞、翻譯模組
         </p>
 
         <p className="mt-5 text-sm font-semibold text-slate-600">程度（滑過或點選看說明）</p>

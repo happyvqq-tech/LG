@@ -10,13 +10,20 @@ import {
 } from '../lib/prompts/reviewPractice'
 import PracticeQuiz from '../components/PracticeQuiz'
 import { logActivity } from '../lib/streakService'
-import type { DrillQuestion, ErrorRecord } from '../lib/types'
+import { TASK_LANGUAGES, type DrillQuestion, type ErrorRecord, type TaskLanguage } from '../lib/types'
 
 /** 一次複習最多幾個錯誤，避免題目太多做不完 */
 const REVIEW_CAP = 8
 
-const BACK_PATH: Record<string, string> = { 古文: '/classical', 英文: '/home', 日文: '/home' }
-const ALLOWED_LANGUAGES = ['英文', '日文', '古文']
+// 有錯誤庫的語言都要列進來。漏掉的話，錯誤庫裡的「開始複習」會導到一個
+// 只寫著「找不到這個語言的錯誤庫」的死頁（韓文剛加進來時就漏了）。
+const BACK_PATH: Record<string, string> = {
+  古文: '/classical',
+  英文: '/home',
+  日文: '/home',
+  韓文: '/home',
+}
+const ALLOWED_LANGUAGES: string[] = [...TASK_LANGUAGES, '古文']
 
 export default function ErrorReview() {
   const navigate = useNavigate()
@@ -69,7 +76,7 @@ export default function ErrorReview() {
         {
           module: 'grader',
           system: reviewPracticeSystemPrompt({
-            language: language as '英文' | '日文' | '古文',
+            language: language as TaskLanguage | '古文',
             errors: picked.map((r) => ({
               original: r.original,
               corrected: r.corrected,

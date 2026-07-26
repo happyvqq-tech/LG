@@ -9,3 +9,6 @@ dev-dist
 worker/node_modules
 worker/.wrangler
 worker/.dev.vars
+
+# 增量編譯快取：進 git 會讓 tsc 用到過期快取，漏掉真的編譯錯誤
+*.tsbuildinfo

@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import RequireProfile from './components/RequireProfile'
+import { TAIGI_ENABLED } from './lib/features'
 import MemberSelect from './pages/MemberSelect'
 import TaskHome from './pages/TaskHome'
 import Listening from './pages/Listening'
@@ -48,9 +49,15 @@ export default function App() {
       <Route path="/vocab/session" element={guarded(<VocabSession />)} />
       <Route path="/vocab/list" element={guarded(<VocabList />)} />
       <Route path="/vocab/quiz" element={guarded(<VocabQuiz />)} />
-      <Route path="/taigi" element={guarded(<TaigiHome />)} />
-      <Route path="/taigi/:scriptId/listening" element={guarded(<TaigiListening />)} />
-      <Route path="/taigi/:scriptId/shadowing" element={guarded(<TaigiShadowing />)} />
+      {/* 台語：程式完成，但要有雅婷金鑰才有聲音，先由 features.ts 關起來。
+          路由也一起關掉，不然直接打網址還是進得去、進去也只會看到錯誤。 */}
+      {TAIGI_ENABLED && (
+        <>
+          <Route path="/taigi" element={guarded(<TaigiHome />)} />
+          <Route path="/taigi/:scriptId/listening" element={guarded(<TaigiListening />)} />
+          <Route path="/taigi/:scriptId/shadowing" element={guarded(<TaigiShadowing />)} />
+        </>
+      )}
       <Route path="/classical" element={guarded(<ClassicalHome />)} />
       <Route path="/classical/particles" element={guarded(<ParticleSession />)} />
       <Route path="/classical/:textId" element={guarded(<ClassicalRead />)} />

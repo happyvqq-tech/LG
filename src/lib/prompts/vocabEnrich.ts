@@ -18,8 +18,14 @@ export interface VocabEnrichInput {
 }
 
 export function vocabEnrichSystemPrompt(input: VocabEnrichInput): string {
-  const isJa = input.language === '日文'
-  const readingDesc = isJa ? '假名讀音（平假名）' : 'KK 或 IPA 音標'
+  // 韓文寫的就是拼音文字，給 KK/IPA 音標沒有意義也沒人在用，
+  // 韓語教材的慣例是給羅馬字轉寫（教育部式／文觀部式）
+  const readingDesc =
+    input.language === '日文'
+      ? '假名讀音（平假名）'
+      : input.language === '韓文'
+        ? '羅馬字轉寫（文觀部式 Revised Romanization）'
+        : 'KK 或 IPA 音標'
 
   const task =
     input.seeds.length > 0
@@ -46,7 +52,13 @@ ${task}${avoid}
 硬性要求：
 - example 必須包含該單字本身
 - collocations 必須是母語者真的會這樣講的組合，寧可少給也不要湊數
-- ${isJa ? '例句標註丁寧體；動詞給辭書形' : '例句用自然口語或商務書面語，依該考試情境決定'}
+- ${
+    input.language === '日文'
+      ? '例句標註丁寧體；動詞給辭書形'
+      : input.language === '韓文'
+        ? '例句用해요體；用言給기본형（-다 結尾）'
+        : '例句用自然口語或商務書面語，依該考試情境決定'
+  }
 
 只輸出 JSON，不加任何前言、不用 markdown 圍欄：
 {

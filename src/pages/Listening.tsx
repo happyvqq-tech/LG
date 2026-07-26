@@ -30,6 +30,13 @@ export default function Listening() {
   const [translateError, setTranslateError] = useState('')
   const sessionRef = useRef(0)
   const persistedDoneRef = useRef(false)
+  /**
+   * 逐句聽的時候，把聽過的句子記下來；整篇每一句都聽過就等於完整聽了一輪。
+   * 沒有這個的話，逐句聽（改版後的主要用法）永遠不會累積次數。
+   * 用 ref 不用 state：它不參與畫面渲染，而且放在 setState 的 updater 裡
+   * 累加會在 StrictMode 下被呼叫兩次而重複計數。
+   */
+  const heardRef = useRef<Set<number>>(new Set())
 
   const translations = task?.task_json.listening_translation ?? null
 
@@ -56,6 +63,13 @@ export default function Listening() {
     setErrorMsg('')
     try {
       await speak(sentences[i], lang, rate)
+      if (sessionRef.current !== session) return
+      // 逐句聽也要算進度：整篇每一句都聽過就等於完整聽了一輪
+      heardRef.current.add(i)
+      if (sentences.length > 0 && heardRef.current.size >= sentences.length) {
+        heardRef.current = new Set() // 歸零，下一輪重新累積
+        setListenCount((c) => c + 1)
+      }
     } catch (e: unknown) {
       if (sessionRef.current === session) setErrorMsg((e as Error).message)
     } finally {
@@ -63,7 +77,7 @@ export default function Listening() {
     }
   }
 
-  /** 整段從頭到尾連續播一輪（不停頓），用來達成「聽兩次解鎖閱讀」 */
+  /** 整段從頭到尾連續播一輪（不停頓） */
   async function playFullPass() {
     stop()
     const session = ++sessionRef.current
@@ -75,6 +89,7 @@ export default function Listening() {
       })
       if (sessionRef.current !== session) return
       setListenCount((c) => c + 1)
+      heardRef.current = new Set() // 整段播完就是完整一輪，逐句的累積歸零重來
       setIndex(0)
     } catch (e: unknown) {
       setErrorMsg((e as Error).message)
@@ -102,15 +117,21 @@ export default function Listening() {
     }
   }
 
-  const canProceed = listenCount >= 2 || task?.task_json.listening_done === true
+  /**
+   * 聽夠了沒——只用來顯示建議，不拿來擋人。
+   *
+   * 之前這個值會讓「進入閱讀」的按鈕變灰，但四關本來就可以自由跳（見 TaskNav
+   * 的說明），把按鈕鎖起來只會做出一條死路：逐句聽是改版後的主要用法，
+   * 而逐句聽根本不會累積次數，等於整篇聽完了按鈕還是灰的。
+   */
+  const listenedEnough = listenCount >= 2 || task?.task_json.listening_done === true
 
-  // 聽滿 2 次要存進 task_json，不然離開這頁再回來（或直接跳去別的分頁）進度就會歸零，
-  // 「聽兩次才能進閱讀」這個關卡就形同虛設（見稽核報告 P0-2）
+  // 聽滿 2 次要存進 task_json，離開這頁再回來才不會從頭算
   useEffect(() => {
-    if (!task || !canProceed || task.task_json.listening_done || persistedDoneRef.current) return
+    if (!task || !listenedEnough || task.task_json.listening_done || persistedDoneRef.current) return
     persistedDoneRef.current = true
     void updateTaskJson(task, { listening_done: true }).then(setTask).catch(() => undefined)
-  }, [task, canProceed, setTask])
+  }, [task, listenedEnough, setTask])
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
 
@@ -213,7 +234,9 @@ export default function Listening() {
           >
             🎧 整段從頭連續播放
           </button>
-          <p className="mt-1.5 text-xs text-slate-400">已完整聽 {listenCount} 次（聽 2 次解鎖閱讀）</p>
+          <p className="mt-1.5 text-xs text-slate-400">
+            已完整聽 {listenCount} 次（逐句把每一句都聽過，也算完整一輪）
+          </p>
         </div>
 
         <div className="mt-6 w-full">
@@ -256,11 +279,15 @@ export default function Listening() {
           stop()
           navigate('/reading')
         }}
-        disabled={!canProceed}
-        className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white disabled:opacity-40"
+        className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white"
       >
-        {canProceed ? '我聽完了 → 進入閱讀' : '請先完整聽 2 次'}
+        我聽完了 → 進入閱讀
       </button>
+      {!listenedEnough && (
+        <p className="mt-1.5 text-center text-xs text-slate-400">
+          建議完整聽 2 次再往下，不過你隨時可以直接進閱讀
+        </p>
+      )}
 
       {showVoicePicker && (
         <VoicePicker language={lang} onClose={() => setShowVoicePicker(false)} />

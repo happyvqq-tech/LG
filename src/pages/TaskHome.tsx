@@ -11,6 +11,7 @@ import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
 import TodayDashboard from '../components/TodayDashboard'
 import AppVersion from '../components/AppVersion'
+import { TAIGI_ENABLED } from '../lib/features'
 import { isTaskLanguage, LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson, type TaskLanguage } from '../lib/types'
 
 function pickRandom<T>(list: T[], count: number): T[] {
@@ -252,21 +253,23 @@ export default function TaskHome() {
           <span className="text-slate-300">→</span>
         </Link>
 
-        {/* 台語跟古文一樣是獨立模組，不走聽說讀寫循環，所以擺在這裡而不是上面的四宮格。
-            刻意不依成員選的語言隱藏——之前把台語藏起來的結果就是「選了卻找不到入口」。 */}
-        <Link
-          to="/taigi"
-          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
-        >
-          <span className="flex items-center gap-3">
-            <span className="text-2xl">🧧</span>
-            <span className="text-left">
-              <span className="block font-bold">台語</span>
-              <span className="block text-sm text-slate-500">聽 ＋ 跟讀・漢字／台羅／華語對照</span>
+        {/* 台語是獨立模組（聽＋跟讀），程式完成但還沒決定要不要用雅婷 TTS，
+            由 lib/features.ts 的開關控制，細節見 TAIGI_MEMO.md */}
+        {TAIGI_ENABLED && (
+          <Link
+            to="/taigi"
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">🧧</span>
+              <span className="text-left">
+                <span className="block font-bold">台語</span>
+                <span className="block text-sm text-slate-500">聽 ＋ 跟讀・漢字／台羅／華語對照</span>
+              </span>
             </span>
-          </span>
-          <span className="text-slate-300">→</span>
-        </Link>
+            <span className="text-slate-300">→</span>
+          </Link>
+        )}
 
         <Link
           to="/classical"
