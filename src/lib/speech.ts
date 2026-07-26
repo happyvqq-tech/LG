@@ -2,6 +2,8 @@
 // 第一階段不串任何付費語音 API（CLAUDE.md 第 2 節）
 
 import type { Language } from './types'
+import { filterByLang, sortByQuality, type VoiceLike } from './voiceScore'
+import { loadVoicePref } from './voicePref'
 
 export const LANG_CODE: Record<Language, string> = {
   英文: 'en-US',
@@ -50,21 +52,27 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   })
 }
 
-/** 挑選自然度較高的 voice：Edge 線上聲音（Natural/Online）> Google > 其他 */
-export async function pickVoice(langCode: string): Promise<SpeechSynthesisVoice | null> {
+/** 這個語言在這台裝置上可用的語音，已依自然度排序（最自然的在最前面） */
+export async function listVoices(lang: Language): Promise<SpeechSynthesisVoice[]> {
   const voices = voicesCache.length > 0 ? voicesCache : await loadVoices()
-  const prefix = langCode.slice(0, 2).toLowerCase()
-  const matches = voices.filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(prefix))
-  if (matches.length === 0) return null
-  const score = (v: SpeechSynthesisVoice): number => {
-    let s = 0
-    if (/natural|online/i.test(v.name)) s += 4
-    else if (/google/i.test(v.name)) s += 2
-    else if (/microsoft/i.test(v.name)) s += 1
-    if (v.lang.replace('_', '-').toLowerCase() === langCode.toLowerCase()) s += 0.5
-    return s
+  return sortByQuality(filterByLang(voices as VoiceLike[], LANG_CODE[lang]), LANG_CODE[lang]) as SpeechSynthesisVoice[]
+}
+
+/**
+ * 挑語音：使用者手動指定過就用他選的，否則用 voiceScore 的評分自動挑最自然的。
+ * 評分邏輯與「哪些語音該避開」見 voiceScore.ts。
+ */
+export async function pickVoice(lang: Language): Promise<SpeechSynthesisVoice | null> {
+  const sorted = await listVoices(lang)
+  if (sorted.length === 0) return null
+
+  const preferredURI = loadVoicePref(lang)
+  if (preferredURI) {
+    // 使用者選的語音可能已被系統移除（例如刪掉下載的語音包），找不到就回頭自動挑
+    const chosen = sorted.find((v) => v.voiceURI === preferredURI)
+    if (chosen) return chosen
   }
-  return [...matches].sort((a, b) => score(b) - score(a))[0]
+  return sorted[0]
 }
 
 export function stopSpeaking(): void {
@@ -79,9 +87,8 @@ export async function speak(text: string, lang: Language, rate = 1): Promise<voi
   if (!ttsSupported()) throw new Error('此瀏覽器不支援語音播放，請改用 Chrome 或 Edge')
   stopSpeaking()
   const utter = new SpeechSynthesisUtterance(text)
-  const code = LANG_CODE[lang]
-  utter.lang = code
-  const voice = await pickVoice(code)
+  utter.lang = LANG_CODE[lang]
+  const voice = await pickVoice(lang)
   if (voice) utter.voice = voice
   utter.rate = rate
   return new Promise((resolve, reject) => {
@@ -91,6 +98,56 @@ export async function speak(text: string, lang: Language, rate = 1): Promise<voi
       else reject(new Error(`語音播放失敗：${e.error}`))
     }
     window.speechSynthesis.speak(utter)
+  })
+}
+
+/**
+ * 連續唸出多句，句與句之間沒有空隙。
+ *
+ * 為什麼不用 for 迴圈一句一句 await speak()：那樣每句都要等上一句的 onend
+ * 回到 JS、再重新 pickVoice、再 speak，句子之間會有明顯停頓，整段聽起來
+ * 一頓一頓的。改成一次把所有句子排進 speechSynthesis 的佇列，由瀏覽器自己
+ * 接續播放，語氣和節奏都連得起來。
+ *
+ * onIndex 在每句真正開始發聲時回報索引，畫面才能同步顯示播到第幾句。
+ * 被 stopSpeaking() 中斷時直接 resolve（由呼叫端的 session 機制決定後續）。
+ */
+export async function speakSequence(
+  texts: string[],
+  lang: Language,
+  rate = 1,
+  onIndex?: (index: number) => void,
+): Promise<void> {
+  if (!ttsSupported()) throw new Error('此瀏覽器不支援語音播放，請改用 Chrome 或 Edge')
+  if (texts.length === 0) return
+  stopSpeaking()
+
+  const voice = await pickVoice(lang)
+  const code = LANG_CODE[lang]
+
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (err?: Error) => {
+      if (settled) return
+      settled = true
+      if (err) reject(err)
+      else resolve()
+    }
+
+    texts.forEach((text, i) => {
+      const utter = new SpeechSynthesisUtterance(text)
+      utter.lang = code
+      if (voice) utter.voice = voice
+      utter.rate = rate
+      utter.onstart = () => onIndex?.(i)
+      utter.onerror = (e) => {
+        // 中途被 cancel 掉是正常操作（換速度、離開頁面），不是錯誤
+        if (e.error === 'canceled' || e.error === 'interrupted') finish()
+        else finish(new Error(`語音播放失敗：${e.error}`))
+      }
+      if (i === texts.length - 1) utter.onend = () => finish()
+      window.speechSynthesis.speak(utter)
+    })
   })
 }
 

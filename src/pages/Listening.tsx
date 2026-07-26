@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
-import { speak, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
+import { speak, speakSequence, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
 import { updateTaskJson } from '../lib/taskService'
 import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
+import VoicePicker from '../components/VoicePicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
 
 export default function Listening() {
@@ -22,6 +23,7 @@ export default function Listening() {
   const [index, setIndex] = useState(0)
   const [listenCount, setListenCount] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
+  const [showVoicePicker, setShowVoicePicker] = useState(false)
   const sessionRef = useRef(0)
   const persistedDoneRef = useRef(false)
 
@@ -46,18 +48,20 @@ export default function Listening() {
     setPlaying(true)
     setErrorMsg('')
     try {
-      for (let i = start; i < sentences.length; i++) {
-        if (sessionRef.current !== session) return
-        setIndex(i)
-        await speak(sentences[i], lang, rate)
-        if (sessionRef.current !== session) return
-        if (onlyOne) break
-        if (i === sentences.length - 1) {
-          // 完整聽完一輪
-          setListenCount((c) => c + 1)
-          setIndex(0)
-        }
+      if (onlyOne) {
+        setIndex(start)
+        await speak(sentences[start], lang, rate)
+        return
       }
+      // 整段用 speakSequence 一次排進佇列，句與句之間才不會有停頓
+      // （之前逐句 await，每句之間都聽得出空隙）
+      await speakSequence(sentences.slice(start), lang, rate, (i) => {
+        if (sessionRef.current === session) setIndex(start + i)
+      })
+      if (sessionRef.current !== session) return
+      // 完整聽完一輪
+      setListenCount((c) => c + 1)
+      setIndex(0)
     } catch (e: unknown) {
       setErrorMsg((e as Error).message)
     } finally {
@@ -156,17 +160,28 @@ export default function Listening() {
               }}
             />
           </div>
-          <button
-            onClick={() => {
-              stop()
-              setSentenceMode(!sentenceMode)
-            }}
-            className={`mt-3 rounded-full px-4 py-2 text-sm font-semibold ${
-              sentenceMode ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            分句播放{sentenceMode ? '中' : ''}
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                stop()
+                setSentenceMode(!sentenceMode)
+              }}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                sentenceMode ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              分句播放{sentenceMode ? '中' : ''}
+            </button>
+            <button
+              onClick={() => {
+                stop()
+                setShowVoicePicker(true)
+              }}
+              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600"
+            >
+              🗣️ 換發音
+            </button>
+          </div>
         </div>
 
         <button
@@ -192,6 +207,10 @@ export default function Listening() {
       >
         {canProceed ? '我聽完了 → 進入閱讀' : '請先完整聽 2 次'}
       </button>
+
+      {showVoicePicker && (
+        <VoicePicker language={lang} onClose={() => setShowVoicePicker(false)} />
+      )}
     </main>
   )
 }

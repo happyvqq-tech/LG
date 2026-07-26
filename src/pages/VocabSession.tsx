@@ -9,6 +9,7 @@ import { ClaudeError } from '../lib/claude'
 import { judgeAnswer, VERDICT_LABELS } from '../lib/quizGrading'
 import { seedsFor, examLanguage, type ExamSystem } from '../data/vocabLists'
 import SpeedPicker from '../components/SpeedPicker'
+import VoicePicker from '../components/VoicePicker'
 import { useSpeechRate } from '../lib/useSpeechRate'
 import { DEFAULT_VOCAB_PREF, type Language, type VocabCard } from '../lib/types'
 
@@ -78,6 +79,7 @@ export default function VocabSession() {
   const [typed, setTyped] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [showVoicePicker, setShowVoicePicker] = useState(false)
   const [done, setDone] = useState(false)
   const [tally, setTally] = useState({ right: 0, wrong: 0 })
   const startedRef = useRef(false)
@@ -280,6 +282,16 @@ export default function VocabSession() {
       <div className="mt-3 flex items-center justify-center gap-2">
         <span className="shrink-0 text-xs text-slate-400">語速</span>
         <SpeedPicker level={speedLevel} onChange={setSpeedLevel} showHint={false} compact />
+        <button
+          onClick={() => {
+            stopSpeaking()
+            setShowVoicePicker(true)
+          }}
+          aria-label="換發音"
+          className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600"
+        >
+          🗣️
+        </button>
       </div>
 
       <p className="mt-3 text-center text-sm font-semibold text-teal-700">
@@ -525,6 +537,10 @@ export default function VocabSession() {
           </p>
         )}
       </footer>
+
+      {showVoicePicker && (
+        <VoicePicker language={language} onClose={() => setShowVoicePicker(false)} />
+      )}
     </main>
   )
 }
