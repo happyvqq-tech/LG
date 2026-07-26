@@ -24,6 +24,7 @@ export default function Listening() {
   const [listenCount, setListenCount] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
   const [showVoicePicker, setShowVoicePicker] = useState(false)
+  const [showText, setShowText] = useState(false)
   const [showZh, setShowZh] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState('')
@@ -128,7 +129,7 @@ export default function Listening() {
         </p>
       )}
 
-      {/* 一句一句聽：不顯示英文原文，只給播放控制與可選的中文翻譯 */}
+      {/* 一句一句聽：原文與中文翻譯預設都藏起來（先用耳朵聽），需要時各自可以展開 */}
       <section className="mt-8 flex flex-1 flex-col items-center justify-center rounded-3xl bg-white p-8 shadow">
         <div className="flex h-28 w-28 items-center justify-center rounded-full bg-teal-50 text-5xl">
           🎧
@@ -136,6 +137,10 @@ export default function Listening() {
         <p className="mt-4 font-semibold text-slate-600">
           第 {index + 1} / {sentences.length} 句
         </p>
+
+        {showText && (
+          <p className="mt-3 text-center text-lg font-semibold leading-relaxed">{sentences[index]}</p>
+        )}
 
         {showZh && (
           <div className="mt-2 min-h-[1.5rem] text-center">
@@ -181,14 +186,24 @@ export default function Listening() {
           </button>
         </div>
 
-        <button
-          onClick={() => void toggleShowZh()}
-          className={`mt-4 rounded-full px-4 py-2 text-sm font-semibold ${
-            showZh ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-          }`}
-        >
-          {showZh ? '隱藏中文' : '顯示中文'}
-        </button>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <button
+            onClick={() => setShowText(!showText)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              showText ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {showText ? '隱藏原文' : '顯示原文'}
+          </button>
+          <button
+            onClick={() => void toggleShowZh()}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              showZh ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {showZh ? '隱藏中文' : '顯示中文'}
+          </button>
+        </div>
 
         <div className="mt-6 w-full border-t border-slate-100 pt-5 text-center">
           <button
