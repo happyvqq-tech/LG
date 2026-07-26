@@ -34,6 +34,9 @@ export default function Shadowing() {
   const [translateError, setTranslateError] = useState('')
 
   const recognizerRef = useRef<HoldToTalkRecognizer | null>(null)
+  // 守衛用 ref 不用 phase state，理由同 Speaking.tsx 的 stopRecording：
+  // 手機上 pointerup 後會再補一個 pointerleave，state 擋不住連續兩次呼叫
+  const recordingRef = useRef(false)
   const aiDurationRef = useRef(0)
   const userStartRef = useRef(0)
   const loggedRef = useRef(false)
@@ -90,15 +93,16 @@ export default function Shadowing() {
   }
 
   function startRecording() {
-    // 瀏覽器對 disabled 按鈕只保證擋掉 click，pointerdown 這類低階事件不一定
-    // 被擋（實測過），所以這裡不能只靠 DOM 的 disabled 屬性（見稽核報告 P1-2）
-    if (!hasHeardDemo || phase === 'ai-reading' || phase === 'recording') return
+    // 瀏覽器對 disabled 按鈕只保證擋掉 click，低階事件不一定被擋（實測過），
+    // 所以這裡不能只靠 DOM 的 disabled 屬性（見稽核報告 P1-2）
+    if (!hasHeardDemo || phase === 'ai-reading' || recordingRef.current) return
     stopSpeaking()
     try {
       const rec = new HoldToTalkRecognizer()
       recognizerRef.current = rec
       rec.start(lang)
       userStartRef.current = performance.now()
+      recordingRef.current = true
       setPhase('recording')
       setErrorMsg('')
     } catch (e: unknown) {
@@ -107,7 +111,8 @@ export default function Shadowing() {
   }
 
   async function stopRecording() {
-    if (phase !== 'recording') return
+    if (!recordingRef.current) return
+    recordingRef.current = false
     const userDurationMs = performance.now() - userStartRef.current
     try {
       const transcript = (await recognizerRef.current?.stop()) ?? ''
@@ -154,6 +159,12 @@ export default function Shadowing() {
     } finally {
       setTranslating(false)
     }
+  }
+
+  /** 點一下開始、再點一下送出——比「按住不放」在手機上可靠得多 */
+  async function toggleRecording() {
+    if (recordingRef.current) await stopRecording()
+    else startRecording()
   }
 
   function goNext(skip = false) {
@@ -205,7 +216,7 @@ export default function Shadowing() {
             onClick={() => navigate('/speaking')}
             className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white"
           >
-            回情境對話
+            回口說選單
           </button>
         </div>
       </main>
@@ -269,19 +280,16 @@ export default function Shadowing() {
         </div>
 
         <button
-          onPointerDown={startRecording}
-          onPointerUp={() => void stopRecording()}
-          onPointerLeave={() => void stopRecording()}
-          onPointerCancel={() => void stopRecording()}
+          onClick={() => void toggleRecording()}
           disabled={!hasHeardDemo && phase !== 'recording'}
-          className={`mt-5 w-full touch-none select-none rounded-xl py-4 text-lg font-bold text-white transition disabled:opacity-40 ${
-            phase === 'recording' ? 'scale-[0.98] bg-red-500' : 'bg-teal-600'
+          className={`mt-5 w-full select-none rounded-xl py-4 text-lg font-bold text-white transition disabled:opacity-40 ${
+            phase === 'recording' ? 'animate-pulse bg-red-500' : 'bg-teal-600'
           }`}
         >
-          {phase === 'recording' ? '🎙 跟讀中…放開送出' : '🎙 按住跟讀這句'}
+          {phase === 'recording' ? '⏹ 唸完了，看分數' : '🎙 開始跟讀這句'}
         </button>
         {!hasHeardDemo && (
-          <p className="mt-1.5 text-center text-xs text-slate-400">先聽一次 AI 示範，再按住跟讀</p>
+          <p className="mt-1.5 text-center text-xs text-slate-400">先聽一次 AI 示範，再開始跟讀</p>
         )}
 
         {errorMsg && <p className="mt-3 text-center text-red-600">{errorMsg}</p>}

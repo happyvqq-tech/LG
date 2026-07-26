@@ -6,6 +6,8 @@ import Listening from './pages/Listening'
 import ListeningCloze from './pages/ListeningCloze'
 import Reading from './pages/Reading'
 import Speaking from './pages/Speaking'
+import SpeakingDiscuss from './pages/SpeakingDiscuss'
+import SpeakingRoleplay from './pages/SpeakingRoleplay'
 import Shadowing from './pages/Shadowing'
 import Writing from './pages/Writing'
 import Feedback from './pages/Feedback'
@@ -33,6 +35,8 @@ export default function App() {
       <Route path="/listening-cloze" element={guarded(<ListeningCloze />)} />
       <Route path="/reading" element={guarded(<Reading />)} />
       <Route path="/speaking" element={guarded(<Speaking />)} />
+      <Route path="/speaking/discuss" element={guarded(<SpeakingDiscuss />)} />
+      <Route path="/speaking/roleplay" element={guarded(<SpeakingRoleplay />)} />
       <Route path="/shadowing" element={guarded(<Shadowing />)} />
       <Route path="/writing" element={guarded(<Writing />)} />
       <Route path="/feedback" element={guarded(<Feedback />)} />
