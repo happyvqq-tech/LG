@@ -3,7 +3,12 @@
 
 import type { ChatMessage } from './types'
 
-export type ClaudeModule = 'taskGenerator' | 'dialogPartner' | 'grader' | 'weeklyReport'
+export type ClaudeModule =
+  | 'taskGenerator'
+  | 'dialogPartner'
+  | 'grader'
+  | 'weeklyReport'
+  | 'taigiScript'
 
 // module → model 對照與 max_tokens 預設（CLAUDE.md 第 5 節）
 const MODULE_CONFIG: Record<ClaudeModule, { model: string; maxTokens: number }> = {
@@ -11,6 +16,8 @@ const MODULE_CONFIG: Record<ClaudeModule, { model: string; maxTokens: number }> 
   dialogPartner: { model: 'claude-haiku-4-5', maxTokens: 1024 },
   grader: { model: 'claude-sonnet-4-6', maxTokens: 3000 },
   weeklyReport: { model: 'claude-sonnet-4-6', maxTokens: 2000 },
+  // 台語漢字用字與台羅拼音要正確，這比一般任務生成難，用能力較強的模型
+  taigiScript: { model: 'claude-sonnet-4-6', maxTokens: 3000 },
 }
 
 export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse'

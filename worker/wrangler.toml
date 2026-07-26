@@ -13,5 +13,8 @@ keep_vars = true
 ALLOWED_ORIGIN = "https://happyvqq-tech.github.io"
 
 # API key 不放這裡！用 secret（擇一）：
-#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put ANTHROPIC_API_KEY   # Claude API
+#   wrangler secret put YATING_API_KEY      # 雅婷 TTS（台語語音）
 #   或 Dashboard → Worker → Settings → Variables and secrets → 型別選 Secret
+#
+# YATING_API_KEY 沒設的話只有台語模組不能用，英日韓古文照常運作。

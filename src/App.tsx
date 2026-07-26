@@ -16,6 +16,9 @@ import VocabHome from './pages/VocabHome'
 import VocabSession from './pages/VocabSession'
 import VocabList from './pages/VocabList'
 import VocabQuiz from './pages/VocabQuiz'
+import TaigiHome from './pages/TaigiHome'
+import TaigiListening from './pages/TaigiListening'
+import TaigiShadowing from './pages/TaigiShadowing'
 import ClassicalHome from './pages/ClassicalHome'
 import ClassicalRead from './pages/ClassicalRead'
 import ErrorReview from './pages/ErrorReview'
@@ -45,6 +48,9 @@ export default function App() {
       <Route path="/vocab/session" element={guarded(<VocabSession />)} />
       <Route path="/vocab/list" element={guarded(<VocabList />)} />
       <Route path="/vocab/quiz" element={guarded(<VocabQuiz />)} />
+      <Route path="/taigi" element={guarded(<TaigiHome />)} />
+      <Route path="/taigi/:scriptId/listening" element={guarded(<TaigiListening />)} />
+      <Route path="/taigi/:scriptId/shadowing" element={guarded(<TaigiShadowing />)} />
       <Route path="/classical" element={guarded(<ClassicalHome />)} />
       <Route path="/classical/particles" element={guarded(<ParticleSession />)} />
       <Route path="/classical/:textId" element={guarded(<ClassicalRead />)} />

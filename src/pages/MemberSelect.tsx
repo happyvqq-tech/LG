@@ -23,10 +23,9 @@ const ALL_LANGUAGES: Language[] = ['英文', '日文', '韓文', '台語', '古�
 /**
  * 尚未實作的語言：選了也不會有任何學習內容，所以明確標示出來，
  * 不要留一個看起來能選、選了卻什麼都沒有的選項。
- * 台語卡在發音來源——瀏覽器沒有台語語音，需要另外的音檔或付費 TTS
- * （CLAUDE.md 第 10 節：雅婷需使用者明確同意才實作）。
+ * 目前全部語言都有內容了，這個清單留著是為了下次再加語言時有地方掛。
  */
-const UNAVAILABLE_LANGUAGES: Language[] = ['台語']
+const UNAVAILABLE_LANGUAGES: Language[] = []
 
 function planSummary(plan: DailyPlan | null): string | null {
   if (!plan || plan.days.length === 0) return null
@@ -308,7 +307,7 @@ function ProfileDrawer({
           })}
         </div>
         <p className="mt-1.5 text-xs text-slate-400">
-          英文／日文／韓文有完整的聽說讀寫任務；古文有專屬的句讀、字詞、翻譯模組
+          英文／日文／韓文有完整的聽說讀寫任務；台語只有聽與說（跟讀）；古文有專屬的句讀、字詞、翻譯模組
         </p>
 
         <p className="mt-5 text-sm font-semibold text-slate-600">程度（滑過或點選看說明）</p>

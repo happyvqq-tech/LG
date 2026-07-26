@@ -16,6 +16,7 @@
    - 貼上 `supabase/migration-005.sql` 全文 → Run（古文進度 classical_progress 表）
    - 貼上 `supabase/migration-006.sql` 全文 → Run（連續天數 activity_log、虛詞專練 particle_cards 表）
    - 貼上 `supabase/migration-007.sql` 全文 → Run（韓文文法點種子；沒跑的話韓文任務生成會失敗）
+   - 貼上 `supabase/migration-008.sql` 全文 → Run（台語腳本欄位 notes / level / topic；沒跑的話台語腳本存不進去）
      ⚠️ 已建過資料庫的人這幾段也要跑，否則會出現「column / table does not exist」
 
 > 古文原文（《古文觀止》222 篇）不進資料庫，隨程式動態載入，第一次進古文頁才下載約 190KB，
@@ -25,7 +26,7 @@
    - `anon public` key → 之後填 `VITE_SUPABASE_ANON_KEY`
    （anon key 屬設計內公開，可放前端；service_role key 絕不能用）
 
-## 2. Cloudflare Worker（Claude API 代理）
+## 2. Cloudflare Worker（Claude API ＋ 台語語音代理）
 
 1. 到 <https://dash.cloudflare.com> 註冊/登入（免費方案即可）
 2. 本機執行：
@@ -35,6 +36,7 @@
    npm install
    npx wrangler login                        # 開瀏覽器授權
    npx wrangler secret put ANTHROPIC_API_KEY # 貼上 Anthropic API key（sk-ant- 開頭）
+   npx wrangler secret put YATING_API_KEY    # 台語語音用，見下方第 6 點
    ```
 
 3. 編輯 `worker/wrangler.toml` 的 `ALLOWED_ORIGIN`：
@@ -47,6 +49,16 @@
    ```
 
 5. Anthropic API key 申請處：<https://console.anthropic.com>（Settings → API Keys）
+6. 台語語音（雅婷 TTS）key 申請處：<https://developer.yating.tw>
+   - 註冊後在 Dev Console 建立一把 API key
+   - 新會員有等值 NT$1,000 的試用點數
+   - 只有台語用得到；沒設的話英日韓照常運作，只有台語模組會顯示
+     「台語語音服務暫時無法使用」
+   - 設好之後打開 `https://<你的worker網址>/health` 應該看到
+     `"yating_key": "已設定（xx 字元）"`
+
+> 台語語音每合成一句就花一次點數，所以 Worker 端用 Cloudflare Cache
+> 依「句子＋音色＋語速」快取，同一句重聽或別台裝置再聽都不會再收費。
 
 ## 3. GitHub Pages（前端）
 
@@ -80,7 +92,7 @@ npm run dev            # http://localhost:5173
 
 # Worker（另開終端機）
 cd worker
-echo 'ANTHROPIC_API_KEY=sk-ant-你的key' > .dev.vars
+printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nYATING_API_KEY=你的雅婷key\n' > .dev.vars
 npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin）
 ```
 
@@ -92,6 +104,8 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 - [ ] 口說頁按住能辨識（STT OK；不支援的瀏覽器顯示鍵盤輸入）
 - [ ] 寫作提交能拿到批改結果，錯誤出現在「錯誤庫」
 - [ ] 完成任務回到首頁，隔天可再生成新任務
+- [ ] 台語首頁「試聽」有聲音（雅婷 TTS OK）
+- [ ] 台語生成腳本成功、逐句能播、跟讀能錄音並拿到分數
 - [ ] 手機可「加入主畫面」，開啟後為全螢幕 App 樣式
 
 ## 常見問題
@@ -103,3 +117,6 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 | 生成任務 401 | `ANTHROPIC_API_KEY` secret 沒設或失效，重新 `wrangler secret put` |
 | 429 請稍後再試 | Worker 限流（同 IP 每分鐘 20 次），等一分鐘 |
 | 手機沒聲音 | iOS 需先點過頁面任一按鈕才能播放；音量/靜音鍵確認 |
+| 台語沒聲音、顯示「語音服務暫時無法使用」 | `YATING_API_KEY` 沒設或點數用完，打開 Worker 的 `/health` 確認 |
+| 台語腳本存不進去（column does not exist） | `migration-008.sql` 沒跑 |
+| 台語跟讀按了沒反應 | 瀏覽器擋掉麥克風權限；Chrome 需在 https 或 localhost 下才給錄音 |

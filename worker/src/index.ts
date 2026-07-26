@@ -1,11 +1,13 @@
 /**
- * Cloudflare Worker：Claude API 代理
- * 唯一職責：藏 API key、轉發 /v1/messages、簡單限流（CLAUDE.md 第 2/3 節）
+ * Cloudflare Worker：Claude API 代理 ＋ 雅婷台語 TTS 代理
+ * 唯一職責：藏 API key、轉發上游、簡單限流（CLAUDE.md 第 2/3 節）
  */
 
 export interface Env {
   ANTHROPIC_API_KEY: string
   ALLOWED_ORIGIN: string
+  /** 雅婷 TTS（台語語音來源，CLAUDE.md 第 10 節的例外，使用者已明確同意） */
+  YATING_API_KEY: string
 }
 
 interface ChatRequestBody {
@@ -15,11 +17,32 @@ interface ChatRequestBody {
   max_tokens: number
 }
 
+interface TtsRequestBody {
+  text: string
+  /** 雅婷語音模型，見 YATING_MODELS */
+  model?: string
+  /** 0.5 ~ 1.5 */
+  speed?: number
+}
+
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
+const YATING_URL = 'https://tts.api.yating.tw/v2/speeches/short'
 const RATE_LIMIT_PER_MINUTE = 20
 
+/**
+ * TTS 另外算一組額度：一段腳本會逐句合成，10 句就吃掉 10 次，
+ * 跟聊天共用 20/分鐘 會在正常使用下就被擋掉。快取命中不計數。
+ */
+const TTS_RATE_LIMIT_PER_MINUTE = 60
+
+/** 白名單，避免任意字串被當成 model 送到上游 */
+const YATING_MODELS = new Set(['tai_female_1', 'tai_female_2', 'tai_male_1'])
+
+/** 一次合成的字數上限，防止誤送整篇文章燒掉點數 */
+const TTS_MAX_CHARS = 200
+
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 2
+const WORKER_VERSION = 3
 
 // in-memory 限流：同一個 Worker isolate 內有效，自用規模足夠
 const rateBuckets = new Map<string, number[]>()
@@ -47,17 +70,145 @@ function jsonResponse(body: unknown, status: number, origin: string): Response {
   })
 }
 
-function isRateLimited(ip: string): boolean {
+function isRateLimited(ip: string, bucket = 'chat', limit = RATE_LIMIT_PER_MINUTE): boolean {
+  const key = `${bucket}:${ip}`
   const now = Date.now()
   const windowStart = now - 60_000
-  const hits = (rateBuckets.get(ip) ?? []).filter((t) => t > windowStart)
-  if (hits.length >= RATE_LIMIT_PER_MINUTE) {
-    rateBuckets.set(ip, hits)
+  const hits = (rateBuckets.get(key) ?? []).filter((t) => t > windowStart)
+  if (hits.length >= limit) {
+    rateBuckets.set(key, hits)
     return true
   }
   hits.push(now)
-  rateBuckets.set(ip, hits)
+  rateBuckets.set(key, hits)
   return false
+}
+
+/**
+ * 快取鍵：同一句話用同一個語音、同一個語速，合成結果永遠一樣，
+ * 不必每次都花雅婷的點數。用 FNV-1a 把內容壓成短字串當網址。
+ */
+function cacheKeyFor(text: string, model: string, speed: number): string {
+  const raw = `${model}|${speed}|${text}`
+  let hash = 2166136261
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `https://tts-cache.local/${model}/${speed}/${(hash >>> 0).toString(36)}-${raw.length}`
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+/** 台語語音合成：代理雅婷 TTS，回傳 audio/mpeg 位元組（不是 base64 JSON） */
+async function handleTts(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!env.YATING_API_KEY) {
+    return jsonResponse(
+      {
+        error: 'missing_tts_key',
+        message: 'Worker 沒有讀到 YATING_API_KEY，請在 Cloudflare Worker Settings → Variables and Secrets 新增',
+      },
+      500,
+      origin,
+    )
+  }
+
+  let body: TtsRequestBody
+  try {
+    body = (await request.json()) as TtsRequestBody
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+
+  const text = (body.text ?? '').trim()
+  if (!text) return jsonResponse({ error: 'missing_text', message: '需要 text' }, 400, origin)
+  if (text.length > TTS_MAX_CHARS) {
+    return jsonResponse(
+      { error: 'text_too_long', message: `一次最多 ${TTS_MAX_CHARS} 字，請先斷句再送` },
+      400,
+      origin,
+    )
+  }
+
+  const model = body.model && YATING_MODELS.has(body.model) ? body.model : 'tai_female_1'
+  // 雅婷只收 0.5~1.5，超出範圍會直接 400
+  const speed = Math.min(1.5, Math.max(0.5, Number(body.speed) || 1))
+  // 留兩位小數，避免浮點誤差把快取打散。位數要跟前端 clampTaigiSpeed 一致，
+  // 一位的話 1.25 會被進位成 1.3，前後端算出來的快取鍵就對不起來了。
+  const speedKey = Math.round(speed * 100) / 100
+
+  const cache = caches.default
+  const cacheRequest = new Request(cacheKeyFor(text, model, speedKey), { method: 'GET' })
+  const cached = await cache.match(cacheRequest)
+  if (cached) {
+    // 快取命中不算額度，也不碰上游
+    return new Response(cached.body, {
+      status: 200,
+      headers: { 'content-type': 'audio/mpeg', 'x-tts-cache': 'hit', ...corsHeaders(origin) },
+    })
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'tts', TTS_RATE_LIMIT_PER_MINUTE)) {
+    return jsonResponse({ error: 'rate_limited', message: '語音請求太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  let upstream: Response
+  try {
+    upstream = await fetch(YATING_URL, {
+      method: 'POST',
+      headers: { key: env.YATING_API_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        input: { text, type: 'text' },
+        voice: { model, speed, pitch: 1, energy: 1 },
+        audioConfig: { encoding: 'MP3', sampleRate: '16K' },
+      }),
+    })
+  } catch {
+    return jsonResponse({ error: 'tts_unreachable', message: '無法連線到語音服務' }, 502, origin)
+  }
+
+  const raw = await upstream.text()
+  if (!upstream.ok) {
+    return jsonResponse(
+      {
+        error: 'tts_failed',
+        status: upstream.status,
+        message:
+          upstream.status === 401 || upstream.status === 403
+            ? '雅婷 TTS 拒絕這把金鑰，請確認 YATING_API_KEY 正確且點數未用完'
+            : `雅婷 TTS 回傳 ${upstream.status}`,
+        upstream: raw.slice(0, 500),
+      },
+      upstream.status === 401 || upstream.status === 403 ? 502 : upstream.status,
+      origin,
+    )
+  }
+
+  let audioContent = ''
+  try {
+    audioContent = (JSON.parse(raw) as { audioContent?: string }).audioContent ?? ''
+  } catch {
+    return jsonResponse({ error: 'tts_bad_response', message: '語音服務回傳格式異常' }, 502, origin)
+  }
+  if (!audioContent) {
+    return jsonResponse({ error: 'tts_empty', message: '語音服務沒有回傳音訊' }, 502, origin)
+  }
+
+  const bytes = base64ToBytes(audioContent)
+  // 存快取的那份要能被 Cloudflare 快取住，所以帶 max-age；回給瀏覽器的
+  // 另外開一份（Response body 只能讀一次）
+  const cacheHeaders = { 'content-type': 'audio/mpeg', 'cache-control': 'public, max-age=31536000' }
+  await cache.put(cacheRequest, new Response(bytes, { headers: cacheHeaders }))
+  return new Response(bytes, {
+    status: 200,
+    headers: { 'content-type': 'audio/mpeg', 'x-tts-cache': 'miss', ...corsHeaders(origin) },
+  })
 }
 
 export default {
@@ -79,6 +230,8 @@ export default {
             key_prefix: prefix,
             key_length: len,
             allowed_origin: origin_setting,
+            // 台語語音用的是另一把 key，沒設的話台語模組會整個不能用
+            yating_key: env.YATING_API_KEY ? `已設定（${env.YATING_API_KEY.length} 字元）` : '（未設定，台語語音無法使用）',
           },
           null,
           2,
@@ -96,6 +249,10 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) })
+    }
+
+    if (url.pathname === '/api/tts' && request.method === 'POST') {
+      return handleTts(request, env, origin)
     }
 
     if (url.pathname !== '/api/chat' || request.method !== 'POST') {

@@ -8,7 +8,7 @@
 
 自用家庭語言學習 Web App（PWA），不對外販售、不做商業功能。
 
-- **語言範圍**：英文（聽說讀寫）、日文（聽說讀寫）、韓文（聽說讀寫）、古文（句讀／字詞／翻譯，獨立模組）、台語（規劃只有聽、說；**尚未實作**，卡在瀏覽器沒有台語語音）
+- **語言範圍**：英文（聽說讀寫）、日文（聽說讀寫）、韓文（聽說讀寫）、古文（句讀／字詞／翻譯，獨立模組）、台語（只有聽、說；獨立模組，語音來自雅婷 TTS）
 - **使用者**：2～4 位家庭成員，程度 B1+ 起跳（高中以上）
 - **核心理念**：任務式循環（聽 → 讀 → 說 → 寫）＋ 個人錯誤記憶庫 ＋ 文法點驅動
 - **無登入系統**：首頁選擇成員即可，不做帳號密碼、不做付費、不做多租戶
@@ -23,14 +23,16 @@
 | 後端 | Cloudflare Workers（唯一職責：藏 API key、轉發 Claude API、簡單限流） |
 | 資料庫 | Supabase 免費版（PostgreSQL），前端用 anon key 直連 |
 | AI | Anthropic Claude API（模型見第 5 節） |
-| 語音 | 瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT）。第一階段不串任何付費語音 API |
+| 語音 | 英日韓古文用瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT） |
+| 台語語音 | 雅婷 TTS（`tts.api.yating.tw`），經 Worker `/api/tts` 代理，key 存 Worker secret |
 
 ## 3. 架構
 
 ```
 瀏覽器 PWA (GitHub Pages)
    ├── Supabase JS client ──→ Supabase（profiles / tasks / errors / grammar_points）
-   └── fetch ──→ Cloudflare Worker /api/chat ──→ api.anthropic.com /v1/messages
+   ├── fetch ──→ Cloudflare Worker /api/chat ──→ api.anthropic.com /v1/messages
+   └── fetch ──→ Cloudflare Worker /api/tts  ──→ tts.api.yating.tw（台語語音，含快取）
                      （API key 存在 Worker 環境變數，絕不出現在前端程式碼）
 ```
 
@@ -65,11 +67,12 @@
 | 對話角色 | `claude-haiku-4-5` | 口說練習的對手，多輪對話 | 純文字 |
 | 批改回饋器 | `claude-sonnet-4-6` | 寫作批改、錯誤分類、文法微課、快練出題 | JSON |
 | 週報生成器 | `claude-sonnet-4-6` | 讀錯誤庫，生成避坑指南 | Markdown |
+| 台語腳本生成 | `claude-sonnet-4-6` | 生成台語腳本（漢字／台羅／華語三對照） | JSON |
 
 - API 端點：`POST https://api.anthropic.com/v1/messages`，headers：`x-api-key`、`anthropic-version: 2023-06-01`、`content-type: application/json`
 - 官方文件：https://docs.claude.com/en/api/overview
 - **凡要求 JSON 輸出的模組**：system prompt 必須明確要求「只輸出 JSON，不加任何前言與 markdown 圍欄」；前端 `claude.ts` 仍需做圍欄剝除與 try-catch 解析，解析失敗自動重試一次
-- max_tokens：對話 1024、任務生成 3000、批改 3000、週報 2000
+- max_tokens：對話 1024、任務生成 3000、批改 3000、週報 2000、台語腳本 3000
 
 ## 6. Prompt 模組（完整內容）
 
@@ -167,7 +170,7 @@
 - `tasks`：id, profile_id, language, task_json, status(pending/done), created_at, completed_at
 - `errors`：id, profile_id, language, original, corrected, error_type, rule_note, status(active/pending_verify/resolved), verify_count, created_at
 - `grammar_points`：id, language, name, level, description, in_rotation(bool)
-- `taiwanese_scripts`：id, title, lines(jsonb: 台文漢字/台羅/華語對照), audio_urls(jsonb), created_at
+- `taiwanese_scripts`：id, title, lines(jsonb: 台文漢字/台羅/華語對照), notes(jsonb), level, topic, audio_urls(jsonb), created_at
 
 錯誤狀態機：`active`（新錯誤）→ 連續 2 次任務未再犯 → `pending_verify`（任務生成器刻意埋設情境）→ 驗證通過 → `resolved`。
 
@@ -178,6 +181,7 @@
 3. 元件保持小而單一職責；頁面邏輯放 pages、共用邏輯放 lib
 4. 所有 Claude API 呼叫必經 `lib/claude.ts`，禁止在元件內直接 fetch Worker
 5. SpeechRecognition 需做瀏覽器相容偵測，不支援時顯示「請改用鍵盤輸入」降級方案
+   （台語沒有 SpeechRecognition 可用，跟讀改比語調節奏，見 `lib/audioProsody.ts`）
 6. 手機優先設計（主要使用裝置為手機/平板），觸控目標 ≥ 44px
 7. 每完成一個步驟即 git commit，訊息格式：`step-N: 簡述`
 
@@ -186,6 +190,7 @@
 | 位置 | 變數 | 說明 |
 |---|---|---|
 | Worker | `ANTHROPIC_API_KEY` | wrangler secret，絕不進 git |
+| Worker | `YATING_API_KEY` | wrangler secret，台語語音；沒設只影響台語 |
 | Worker | `ALLOWED_ORIGIN` | GitHub Pages 網址，CORS 白名單 |
 | 前端 `.env` | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase 連線 |
 | 前端 `.env` | `VITE_WORKER_URL` | Worker 端點 |
@@ -195,7 +200,7 @@
 ## 10. 禁止事項
 
 - 不做登入/註冊/金流/多租戶
-- 不引入付費語音 API（台語雅婷除外，且需使用者明確同意才實作）
+- 不引入付費語音 API（台語雅婷除外——使用者已於 2026-07 明確同意，已實作）
 - 不在前端暴露任何 API key（Supabase anon key 除外，屬設計內公開）
 - 不擅自升級/更換主要框架與模型字串
 - 不生成與任務無關的大量教材塞進資料庫
