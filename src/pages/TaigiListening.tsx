@@ -12,8 +12,12 @@ import { useProfile } from '../lib/profileContext'
 import { useSpeechRate } from '../lib/useSpeechRate'
 import SpeedPicker from '../components/SpeedPicker'
 
-/** 預先合成後面幾句，換句時不用等 */
-const PRELOAD_AHEAD = 2
+/**
+ * 預先合成後面幾句，換句時不用等。
+ * 只多抓一句：每合成一句就花一次雅婷的點數，抓太多而使用者中途離開就是白花錢
+ * （已經聽過的句子由 Worker 端快取，重聽不再計費）。
+ */
+const PRELOAD_AHEAD = 1
 
 export default function TaigiListening() {
   const { scriptId } = useParams<{ scriptId: string }>()
