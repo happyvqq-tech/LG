@@ -7,7 +7,7 @@ function formatDate(iso: string): string {
 
 export default function AppVersion() {
   return (
-    <p className="mt-6 text-right text-xs text-slate-300">
+    <p className="mt-6 text-right text-xs text-slate-400">
       {formatDate(__BUILD_DATE__)} · v{__APP_VERSION__}
     </p>
   )

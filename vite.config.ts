@@ -29,6 +29,9 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // 自己在 main.tsx 用 virtual:pwa-register 註冊（含檢查更新的邏輯），
+      // 不用外掛自動注入的陽春版本（那個版本只 register()，從來不主動檢查更新）
+      injectRegister: false,
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: '家庭語言學習',
@@ -45,6 +48,10 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        // 新的 service worker 裝好後立刻接管，不必等使用者把所有分頁／
+        // 已安裝的 PWA 都關掉才生效——不然改版永遠感覺不到差異
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
         // 古文原文與夾註各約 190KB（gzip），不預先下載，
         // 改成「第一次進古文才抓，抓過就永久離線可用」
