@@ -1,12 +1,29 @@
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// 版本號／更新日期直接從 git 取得，不需要每次改版手動維護一個版本欄位——
+// commit hash 保證每次改版都不同，commit 時間就是這次改版的日期
+function gitInfo(cmd: string, fallback: string): string {
+  try {
+    return execSync(cmd).toString().trim()
+  } catch {
+    return fallback
+  }
+}
+const APP_VERSION = gitInfo('git rev-parse --short HEAD', 'dev')
+const BUILD_DATE = gitInfo('git log -1 --format=%cI', new Date().toISOString())
+
 // GitHub Pages 部署於 https://<user>.github.io/lglearning/，
 // 因此 production build 的 base 必須是 repo 名稱；本地 dev 用 '/'
 export default defineConfig(({ mode }) => ({
   base: mode === 'production' ? '/lglearning/' : '/',
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_DATE__: JSON.stringify(BUILD_DATE),
+  },
   plugins: [
     react(),
     tailwindcss(),

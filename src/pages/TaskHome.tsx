@@ -10,6 +10,7 @@ import { downloadIcs } from '../lib/ics'
 import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
 import TodayDashboard from '../components/TodayDashboard'
+import AppVersion from '../components/AppVersion'
 import { LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson } from '../lib/types'
 
 function pickRandom<T>(list: T[], count: number): T[] {
@@ -283,6 +284,8 @@ export default function TaskHome() {
       {showErrorBank && (
         <ErrorBank profileId={profile.id} language={language} onClose={() => setShowErrorBank(false)} />
       )}
+
+      <AppVersion />
     </main>
   )
 }
