@@ -56,21 +56,6 @@
      「台語語音服務暫時無法使用」
    - 設好之後打開 `https://<你的worker網址>/health` 應該看到
      `"yating_key": "已設定（xx 字元）"`
-7. 通關密碼（選配，防網址外流被盜用 API 額度）：
-
-   ```bash
-   npx wrangler secret put ACCESS_PASSPHRASE   # 自訂一組全家共用的密碼
-   ```
-
-   - 這**不是帳號系統**，全家共用同一組密碼，只是擋在 `/api/chat`、`/api/tts`
-     前面，避免陌生人拿到網址後亂用把 Anthropic／雅婷的額度燒光
-   - 設定後前端第一次開站會跳出輸入畫面，輸對一次後存在該裝置的
-     localStorage，之後不用每次都輸入；換裝置、換瀏覽器要再輸入一次
-   - **不影響 Supabase**：anon key 本來就設計成前端公開，這道密碼只擋
-     「打會花錢的 AI/TTS API」，不會阻止有心人直接拿 anon key 打 Supabase
-   - 完全不設就是原本的行為——任何人拿到網址都能直接用，這是預設狀態
-   - 想換密碼：重新 `wrangler secret put ACCESS_PASSPHRASE` 蓋掉舊的，
-     所有裝置下次呼叫 AI 功能時會自動被登出、跳回輸入畫面
 
 > 台語語音每合成一句就花一次點數，所以 Worker 端用 Cloudflare Cache
 > 依「句子＋音色＋語速」快取，同一句重聽或別台裝置再聽都不會再收費。
@@ -107,7 +92,7 @@ npm run dev            # http://localhost:5173
 
 # Worker（另開終端機）
 cd worker
-printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nYATING_API_KEY=你的雅婷key\nACCESS_PASSPHRASE=test1234\n' > .dev.vars
+printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nYATING_API_KEY=你的雅婷key\n' > .dev.vars
 npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin）
 ```
 
@@ -122,8 +107,6 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 - [ ] 台語首頁「試聽」有聲音（雅婷 TTS OK）
 - [ ] 台語生成腳本成功、逐句能播、跟讀能錄音並拿到分數
 - [ ] 手機可「加入主畫面」，開啟後為全螢幕 App 樣式
-- [ ] （若設了 `ACCESS_PASSPHRASE`）開站會先跳出密碼畫面，輸對才進得去；
-      輸錯會顯示「通關密碼不對」；輸對後重新整理不會再問第二次
 
 ## 常見問題
 
@@ -137,5 +120,3 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 | 台語沒聲音、顯示「語音服務暫時無法使用」 | `YATING_API_KEY` 沒設或點數用完，打開 Worker 的 `/health` 確認 |
 | 台語腳本存不進去（column does not exist） | `migration-008.sql` 沒跑 |
 | 台語跟讀按了沒反應 | 瀏覽器擋掉麥克風權限；Chrome 需在 https 或 localhost 下才給錄音 |
-| 開站一直卡在密碼畫面，密碼明明是對的 | 檢查 `wrangler secret put ACCESS_PASSPHRASE` 有沒有打錯字或多打了空白；改完密碼要 `wrangler deploy` 才生效 |
-| 用到一半突然又跳回密碼畫面 | 密碼被在別的裝置改掉了，重新輸入新密碼即可，不是壞掉 |

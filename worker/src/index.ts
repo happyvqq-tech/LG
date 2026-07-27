@@ -8,11 +8,6 @@ export interface Env {
   ALLOWED_ORIGIN: string
   /** 雅婷 TTS（台語語音來源，CLAUDE.md 第 10 節的例外，使用者已明確同意） */
   YATING_API_KEY: string
-  /**
-   * 全家共用的通關密碼，擋在會花錢的端點前面（不是帳號系統，只是防網址外流被盜用）。
-   * 沒設的話這道關卡整個不啟用，向下相容還沒設定過的部署。
-   */
-  ACCESS_PASSPHRASE?: string
 }
 
 interface ChatRequestBody {
@@ -47,10 +42,7 @@ const YATING_MODELS = new Set(['tai_female_1', 'tai_female_2', 'tai_male_1'])
 const TTS_MAX_CHARS = 200
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 4
-
-/** 前端夾帶通關密碼的 header 名稱 */
-const ACCESS_HEADER = 'x-lgl-access'
+const WORKER_VERSION = 3
 
 // in-memory 限流：同一個 Worker isolate 內有效，自用規模足夠
 const rateBuckets = new Map<string, number[]>()
@@ -66,26 +58,9 @@ function corsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': `content-type, ${ACCESS_HEADER}`,
+    'Access-Control-Allow-Headers': 'content-type',
     'Access-Control-Max-Age': '86400',
   }
-}
-
-/**
- * 通關密碼檢查。ACCESS_PASSPHRASE 沒設就不擋（向下相容還沒設定過的部署，
- * 就跟 YATING_API_KEY 沒設只影響台語模組一樣，這是選配功能不是必要條件）。
- */
-function hasAccess(request: Request, env: Env): boolean {
-  if (!env.ACCESS_PASSPHRASE) return true
-  return request.headers.get(ACCESS_HEADER) === env.ACCESS_PASSPHRASE
-}
-
-function accessDeniedResponse(origin: string): Response {
-  return jsonResponse(
-    { error: 'access_denied', message: '通關密碼不對或已變更，請重新輸入' },
-    401,
-    origin,
-  )
 }
 
 function jsonResponse(body: unknown, status: number, origin: string): Response {
@@ -132,8 +107,6 @@ function base64ToBytes(b64: string): Uint8Array {
 
 /** 台語語音合成：代理雅婷 TTS，回傳 audio/mpeg 位元組（不是 base64 JSON） */
 async function handleTts(request: Request, env: Env, origin: string): Promise<Response> {
-  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
-
   if (!env.YATING_API_KEY) {
     return jsonResponse(
       {
@@ -259,8 +232,6 @@ export default {
             allowed_origin: origin_setting,
             // 台語語音用的是另一把 key，沒設的話台語模組會整個不能用
             yating_key: env.YATING_API_KEY ? `已設定（${env.YATING_API_KEY.length} 字元）` : '（未設定，台語語音無法使用）',
-            // 通關密碼是選配的，沒設就代表任何人拿到網址都能直接用
-            access_passphrase: env.ACCESS_PASSPHRASE ? '已設定（有通關密碼保護）' : '（未設定，任何人都能直接使用）',
           },
           null,
           2,
@@ -284,19 +255,9 @@ export default {
       return handleTts(request, env, origin)
     }
 
-    // 前端在通關密碼輸入畫面用這支立即驗證對不對，不用等到真的送出一次
-    // 任務生成才發現密碼錯——那樣使用者體驗很差且會浪費一次 AI 額度判斷失敗原因
-    if (url.pathname === '/api/verify-access' && request.method === 'POST') {
-      return hasAccess(request, env)
-        ? jsonResponse({ ok: true }, 200, origin)
-        : accessDeniedResponse(origin)
-    }
-
     if (url.pathname !== '/api/chat' || request.method !== 'POST') {
       return jsonResponse({ error: 'not_found' }, 404, origin)
     }
-
-    if (!hasAccess(request, env)) return accessDeniedResponse(origin)
 
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
     if (isRateLimited(ip)) {

@@ -9,10 +9,6 @@
 // 兩層都以「句子＋音色＋語速」為鍵。
 
 import { clampTaigiSpeed, DEFAULT_TAIGI_VOICE, type TaigiVoiceId } from './taigiVoice'
-import { clearAccessPassphrase, loadAccessPassphrase } from './accessGate'
-
-/** 要跟 claude.ts 及 worker/src/index.ts 的 ACCESS_HEADER 一致 */
-const ACCESS_HEADER = 'x-lgl-access'
 
 export class TaigiTtsError extends Error {
   /** 給使用者看的白話訊息，技術細節留在 message */
@@ -39,15 +35,11 @@ async function fetchAudioUrl(text: string, voice: TaigiVoiceId, speed: number): 
     throw new TaigiTtsError('缺少 VITE_WORKER_URL，請依 .env.example 建立 .env', '台語語音服務目前無法使用')
   }
 
-  const passphrase = loadAccessPassphrase()
   let res: Response
   try {
     res = await fetch(`${workerUrl.replace(/\/$/, '')}/api/tts`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(passphrase ? { [ACCESS_HEADER]: passphrase } : {}),
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text, model: voice, speed }),
     })
   } catch {
@@ -56,18 +48,11 @@ async function fetchAudioUrl(text: string, voice: TaigiVoiceId, speed: number): 
 
   if (!res.ok) {
     let detail = ''
-    let errorCode = ''
     try {
       const j = (await res.json()) as { message?: string; error?: string }
       detail = j.message ?? j.error ?? ''
-      errorCode = j.error ?? ''
     } catch {
       // 非 JSON 錯誤內容，只回報狀態碼
-    }
-    if (res.status === 401 && errorCode === 'access_denied') {
-      clearAccessPassphrase()
-      window.location.reload()
-      throw new TaigiTtsError('access denied', '通關密碼已變更，請重新輸入')
     }
     if (res.status === 429) {
       throw new TaigiTtsError('tts rate limited', '語音請求太頻繁，請一分鐘後再試')
