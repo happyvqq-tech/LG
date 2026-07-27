@@ -21,6 +21,15 @@ import {
 
 const ALL_LANGUAGES: Language[] = ['英文', '日文', '韓文', '台語', '古文']
 
+const INTRO_DISMISSED_KEY = 'lgl.introDismissed'
+
+const INTRO_STEPS: { icon: string; label: string; desc: string }[] = [
+  { icon: '🎧', label: '聽', desc: '聽一段情境對話' },
+  { icon: '📖', label: '讀', desc: '學關鍵語塊、抓重點' },
+  { icon: '🗣️', label: '說', desc: '跟 AI 角色對話練習' },
+  { icon: '✍️', label: '寫', desc: '寫幾句，AI 幫你批改' },
+]
+
 /**
  * 目前不開放選擇的語言：選了也不會有學習內容，所以明確標示出來，
  * 不要留一個看起來能選、選了卻什麼都沒有的選項。
@@ -48,6 +57,23 @@ export default function MemberSelect() {
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Profile | null>(null)
   const [creating, setCreating] = useState(false)
+  const [introOpen, setIntroOpen] = useState(() => {
+    try {
+      return localStorage.getItem(INTRO_DISMISSED_KEY) !== '1'
+    } catch {
+      // localStorage 不可用（無痕模式等）時，預設展開說明卡
+      return true
+    }
+  })
+
+  function dismissIntro() {
+    setIntroOpen(false)
+    try {
+      localStorage.setItem(INTRO_DISMISSED_KEY, '1')
+    } catch {
+      // 存不進去就算了，不影響這次的收合
+    }
+  }
 
   async function fetchProfiles() {
     setLoading(true)
@@ -76,7 +102,47 @@ export default function MemberSelect() {
       <header className="pt-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-teal-800">家庭語言學習</h1>
         <p className="mt-2 text-slate-500">今天誰要練習？</p>
+        {!introOpen && (
+          <button
+            onClick={() => setIntroOpen(true)}
+            className="mt-2 inline-block min-h-[44px] px-3 text-sm font-semibold text-teal-600 underline underline-offset-2"
+          >
+            怎麼玩？
+          </button>
+        )}
       </header>
+
+      {introOpen && (
+        <section className="mt-6 rounded-3xl bg-teal-50/70 p-5 ring-1 ring-teal-100">
+          <p className="text-center text-sm font-semibold text-teal-800">
+            每個任務 8～15 分鐘，練「聽 → 讀 → 說 → 寫」一輪
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {INTRO_STEPS.map((step, i) => (
+              <div key={step.label} className="rounded-2xl bg-white p-3 text-center shadow-sm">
+                <span className="text-2xl" aria-hidden="true">
+                  {step.icon}
+                </span>
+                <p className="mt-1 text-sm font-bold text-teal-700">
+                  {i + 1}. {step.label}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-xs leading-relaxed text-slate-600">
+            寫錯、說錯的地方系統會記起來，之後換個情境再考你一次，直到真的學會；
+            <br />
+            每週也會根據你的弱點，安排該練的文法重點。
+          </p>
+          <button
+            onClick={dismissIntro}
+            className="mt-4 block min-h-[44px] w-full rounded-xl bg-teal-600 text-sm font-semibold text-white"
+          >
+            知道了，選我的成員
+          </button>
+        </section>
+      )}
 
       {loading && <p className="mt-12 text-center text-slate-400">載入中…</p>}
 
