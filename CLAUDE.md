@@ -13,6 +13,8 @@
 - **使用者**：2～4 位家庭成員，程度 B1+ 起跳（高中以上）
 - **核心理念**：任務式循環（聽 → 讀 → 說 → 寫）＋ 個人錯誤記憶庫 ＋ 文法點驅動
 - **無登入系統**：首頁選擇成員即可，不做帳號密碼、不做付費、不做多租戶
+- **通關密碼（選配）**：全家共用一組密碼，擋在 Worker 的 `/api/chat`、`/api/tts`
+  前面，只為了防網址外流被陌生人盜用 API 額度，不是帳號系統，見 `ACCESS_GATE_MEMO.md`
 
 ## 2. 技術棧（不可擅自更換）
 
@@ -192,6 +194,7 @@
 |---|---|---|
 | Worker | `ANTHROPIC_API_KEY` | wrangler secret，絕不進 git |
 | Worker | `YATING_API_KEY` | wrangler secret，台語語音；沒設只影響台語 |
+| Worker | `ACCESS_PASSPHRASE` | wrangler secret，選配；沒設就是預設狀態（任何人拿到網址都能用），見 `ACCESS_GATE_MEMO.md` |
 | Worker | `ALLOWED_ORIGIN` | GitHub Pages 網址，CORS 白名單 |
 | 前端 `.env` | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase 連線 |
 | 前端 `.env` | `VITE_WORKER_URL` | Worker 端點 |
@@ -201,6 +204,8 @@
 ## 10. 禁止事項
 
 - 不做登入/註冊/金流/多租戶
+  （選配的 `ACCESS_PASSPHRASE` 通關密碼不算：全家共用一組密碼，沒有帳號、
+  沒有使用者資料、沒有後台審核，只是擋在 Worker 前面防網址外流，見 `ACCESS_GATE_MEMO.md`）
 - 不引入付費語音 API（台語雅婷除外——使用者已於 2026-07 明確同意，已實作但預設關閉）
 - 不在前端暴露任何 API key（Supabase anon key 除外，屬設計內公開）
 - 不擅自升級/更換主要框架與模型字串
