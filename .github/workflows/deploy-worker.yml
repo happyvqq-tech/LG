@@ -1,0 +1,55 @@
+# push main（且動到 worker/）→ 自動部署 Cloudflare Worker
+#
+# 為什麼要有這個：前端由 deploy.yml 自動部署，Worker 卻要手動跑
+# `wrangler deploy`。兩邊不同步時 AI 功能會整個壞掉——前端送新格式、
+# 舊 Worker 不認得，而且從手機上沒辦法補救。讓它們同一個觸發條件就不會再發生。
+#
+# 一次性設定（見 DEPLOY.md 第 2 節）：
+#   repo Settings → Secrets and variables → Actions → New repository secret
+#     CLOUDFLARE_API_TOKEN   （Cloudflare → My Profile → API Tokens
+#                             → 用 "Edit Cloudflare Workers" 範本建立）
+#     CLOUDFLARE_ACCOUNT_ID  （Cloudflare 後台網址列 /accounts/<這一段>；
+#                             帳號底下只有一個 account 的話可以不設）
+#
+# wrangler.toml 有 keep_vars = true，所以這裡的部署不會洗掉已設定的 secret。
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/deploy-worker.yml'
+  # 需要重跑（例如剛補上 secret）時，到 Actions 頁按 Run workflow 即可，手機也能操作
+  workflow_dispatch:
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: 安裝相依套件
+        run: npm ci
+        working-directory: worker
+
+      # 型別錯誤要在部署前擋下來，不要讓壞的 Worker 上線
+      - name: 型別檢查
+        run: npm run typecheck
+        working-directory: worker
+
+      - name: 部署
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
