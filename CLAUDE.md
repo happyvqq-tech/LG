@@ -50,7 +50,7 @@
 │   └── wrangler.toml
 ├── src/
 │   ├── pages/              # MemberSelect / TaskHome / Listening / Reading /
-│   │                       # Speaking / Writing / Feedback / GrammarDrill / Taiwanese
+│   │                       # Speaking / Writing / Rewrite / Feedback / GrammarDrill / Taiwanese
 │   │                       # TaskArchive / TaskReview（教材庫：翻閱過去任務複習，唯讀）
 │   │                       # BackTranslate（回譯：看中文產出目標語，再跟原句比對）
 │   │                       # Fluency（流利度 4/3/2：同段話講三次，時間遞減）
