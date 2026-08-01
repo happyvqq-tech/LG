@@ -2,14 +2,14 @@
 // 訊息列表、語音輸入與鍵盤降級。兩者只有 system prompt 與逐字稿存放欄位不同，
 // 抽出來才不用把「錄音守衛」這種容易出錯的邏輯抄第三份。
 import { useEffect, useRef, useState } from 'react'
-import { callClaude, ClaudeError } from '../lib/claude'
+import { type PromptModule, callClaude, ClaudeError } from '../lib/claude'
 import { HINT_REQUEST, stripCompleteMarker, TASK_COMPLETE_MARKER } from '../lib/prompts/dialogPartner'
 import { HoldToTalkRecognizer, speak, stopSpeaking, sttSupported } from '../lib/speech'
 import type { ChatMessage, Language } from '../lib/types'
 
 export default function VoiceChat({
   language,
-  systemPrompt,
+  prompt,
   bootstrap,
   initialMessages,
   onMessages,
@@ -19,7 +19,8 @@ export default function VoiceChat({
   onCompleteAction,
 }: {
   language: Language
-  systemPrompt: string
+  /** 要用哪個對話 prompt 模組與變數；實際的 prompt 內容在 Worker */
+  prompt: { module: PromptModule; vars: unknown }
   /** 讓 AI 先開口的引導訊息，不顯示在畫面上 */
   bootstrap: ChatMessage
   /** 續接用的既有逐字稿（只在第一次掛載時採用） */
@@ -52,8 +53,8 @@ export default function VoiceChat({
   // requestReply 在 closure 裡跑，用 ref 才拿得到最新語速與 prompt
   const rateRef = useRef(rate)
   rateRef.current = rate
-  const systemRef = useRef(systemPrompt)
-  systemRef.current = systemPrompt
+  const promptRef = useRef(prompt)
+  promptRef.current = prompt
 
   useEffect(() => {
     return () => {
@@ -83,8 +84,8 @@ export default function VoiceChat({
     setErrorMsg('')
     try {
       const reply = await callClaude({
-        module: 'dialogPartner',
-        system: systemRef.current,
+        promptModule: promptRef.current.module,
+        vars: promptRef.current.vars,
         messages: [bootstrap, ...history],
       })
       const withReply: ChatMessage[] = [...history, { role: 'assistant', content: reply }]

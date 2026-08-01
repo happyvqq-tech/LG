@@ -26,12 +26,6 @@ export const TAIGI_LEVEL_DESC: Record<TaigiLevel, string> = {
   進階: '句子較長，會用到俗諺與比較道地的講法',
 }
 
-const LEVEL_RULE: Record<TaigiLevel, string> = {
-  入門: '每句 5-10 個字，只用最高頻的日常詞彙，不用俗諺',
-  日常: '每句 8-16 個字，可用常見語尾詞（啦、喔、neh、hooh）',
-  進階: '每句 12-22 個字，可用 1-2 句俗諺或較道地的講法',
-}
-
 export const TAIGI_TOPICS = [
   '菜市仔買菜',
   '和阿公阿媽開講',
@@ -44,32 +38,6 @@ export const TAIGI_TOPICS = [
   '小吃攤點餐',
   '厝內的日常',
 ] as const
-
-export function taigiScriptSystemPrompt(input: TaigiScriptInput): string {
-  return `你是台語（台灣閩南語）教材編寫者，為台灣家庭設計「聽」與「說」的練習腳本。
-
-輸入：
-- 情境：${input.topic}
-- 難度：${input.level}（${LEVEL_RULE[input.level]}）
-
-硬性要求：
-1. 產出 6-10 句的自然對話或短講，口語，不要書面語腔
-2. 每一句都要三行對照：
-   - hanji：台文漢字，用教育部《臺灣閩南語推薦用字》（例如「這馬」不寫「現在」、「佇」不寫「在」、「毋」不寫「不」）
-   - tailo：教育部臺灣閩南語羅馬字拼音（台羅），要標聲調數字或調符，音節之間用連字號連接（例如 tsit-má、tī、m̄）
-   - mandarin：華語翻譯，繁體中文，意思要到位不要逐字硬翻
-3. hanji 與 tailo 必須逐字對應，同一句不可以一邊多字一邊少字
-4. 一句就是一句，不要在單一句裡塞多個句號
-5. title 用華語寫，8 字以內，讓人一看就知道情境
-6. notes 給 3-5 個這段腳本裡值得記住的台語詞或講法，每個都要 word（漢字）、tailo、zh（華語意思）
-
-只輸出 JSON，不加任何前言、不用 markdown 圍欄：
-{
-  "title": "",
-  "lines": [{"hanji": "", "tailo": "", "mandarin": ""}],
-  "notes": [{"word": "", "tailo": "", "zh": ""}]
-}`
-}
 
 export interface TaigiNote {
   word: string

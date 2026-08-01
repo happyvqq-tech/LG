@@ -17,57 +17,6 @@ export interface VocabEnrichInput {
   known: string[]
 }
 
-export function vocabEnrichSystemPrompt(input: VocabEnrichInput): string {
-  // 韓文寫的就是拼音文字，給 KK/IPA 音標沒有意義也沒人在用，
-  // 韓語教材的慣例是給羅馬字轉寫（教育部式／文觀部式）
-  const readingDesc =
-    input.language === '日文'
-      ? '假名讀音（平假名）'
-      : input.language === '韓文'
-        ? '羅馬字轉寫（文觀部式 Revised Romanization）'
-        : 'KK 或 IPA 音標'
-
-  const task =
-    input.seeds.length > 0
-      ? `請為以下指定單字補完學習資料，順序與數量必須完全一致（${input.seeds.length} 個）：
-${input.seeds.map((s, i) => `${i + 1}. ${s.w}（${s.pos} ${s.zh}）`).join('\n')}`
-      : `請產生 ${input.count} 個適合 ${input.exam} ${input.examLevel} 程度的高頻單字。`
-
-  const avoid =
-    input.known.length > 0
-      ? `\n\n以下單字使用者已經學過，絕對不要再出現：${input.known.slice(0, 120).join('、')}`
-      : ''
-
-  return `你是${input.language}單字教材編寫者，服務對象為準備 ${input.exam} ${input.examLevel} 的台灣學習者。
-
-${task}${avoid}
-
-每個單字要給：
-1. reading：${readingDesc}
-2. meaning_zh：繁體中文字義。一詞多義時只給該考試最常考的 1-2 個，用「；」分隔
-3. example：一個例句，長度 8-18 字，情境要貼近 ${input.exam} 的真實出題場景（不要教科書式的假句子）
-4. example_zh：例句的繁體中文翻譯
-5. collocations：2-3 個真實高頻搭配（如 make a decision、下決心を固める）。給搭配片語本身，不要給整句
-
-硬性要求：
-- example 必須包含該單字本身
-- collocations 必須是母語者真的會這樣講的組合，寧可少給也不要湊數
-- ${
-    input.language === '日文'
-      ? '例句標註丁寧體；動詞給辭書形'
-      : input.language === '韓文'
-        ? '例句用해요體；用言給기본형（-다 結尾）'
-        : '例句用自然口語或商務書面語，依該考試情境決定'
-  }
-
-只輸出 JSON，不加任何前言、不用 markdown 圍欄：
-{
-  "words": [
-    {"word":"","reading":"","meaning_zh":"","pos":"","example":"","example_zh":"","collocations":["",""]}
-  ]
-}`
-}
-
 export interface EnrichedWord {
   word: string
   reading: string

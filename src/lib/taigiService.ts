@@ -8,7 +8,7 @@ import { supabase } from './supabase'
 import { callClaudeJSON } from './claude'
 import {
   isTaigiScriptJson,
-  taigiScriptSystemPrompt,
+  type TaigiScriptInput,
   type TaigiLevel,
   type TaigiNote,
 } from './prompts/taigiScript'
@@ -58,8 +58,8 @@ export async function deleteTaigiScript(id: string): Promise<void> {
 export async function generateTaigiScript(topic: string, level: TaigiLevel): Promise<TaigiScriptRow> {
   const json = await callClaudeJSON(
     {
-      module: 'taigiScript',
-      system: taigiScriptSystemPrompt({ topic, level }),
+      promptModule: 'taigiScript',
+      vars: { topic, level } satisfies TaigiScriptInput,
       messages: [{ role: 'user', content: `請生成「${topic}」的台語腳本` }],
     },
     isTaigiScriptJson,

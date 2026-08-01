@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import ErrorBank from '../components/ErrorBank'
 import { useProfile } from '../lib/profileContext'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
-import { taskGeneratorSystemPrompt, isTaskJson } from '../lib/prompts/taskGenerator'
+import { isTaskJson, type TaskGeneratorInput } from '../lib/prompts/taskGenerator'
 import { createTask, getTodayPendingTask, setActiveTaskId } from '../lib/taskService'
 import { downloadIcs } from '../lib/ics'
 import { getWordsForTask } from '../lib/vocabService'
@@ -107,17 +107,20 @@ export default function TaskHome() {
       // 4. 單字庫中複習中的字，讓任務自然帶到（學了馬上用得到）
       const vocabWords = await getWordsForTask(profile.id, language)
 
-      const system = taskGeneratorSystemPrompt({
-        language,
-        level: profile.level,
-        scenario,
-        grammarPoints,
-        pendingErrors: (errData ?? []) as ErrorRecord[],
-        exposureErrors,
-        vocabWords,
-      })
       const taskJson = await callClaudeJSON<TaskJson>(
-        { module: 'taskGenerator', system, messages: [{ role: 'user', content: '請生成今日任務' }] },
+        {
+          promptModule: 'taskGenerator',
+          vars: {
+            language,
+            level: profile.level,
+            scenario,
+            grammarPoints,
+            pendingErrors: (errData ?? []) as ErrorRecord[],
+            exposureErrors,
+            vocabWords,
+          } satisfies TaskGeneratorInput,
+          messages: [{ role: 'user', content: '請生成今日任務' }],
+        },
         isTaskJson,
       )
       // 記下本任務埋設驗證的錯誤，完成任務時據此推進狀態機

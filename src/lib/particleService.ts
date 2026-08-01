@@ -5,7 +5,7 @@ import { findClauses } from './particleCorpus'
 import { validateParticleAnswers, buildSenseOptions } from './particleRules'
 import { callClaudeJSON } from './claude'
 import {
-  particleTutorSystemPrompt,
+  type ParticleQuizInput,
   isParticleQuizResult,
   type ParticleQuizResult,
 } from './prompts/particleTutor'
@@ -95,8 +95,8 @@ export async function buildParticleSession(profileId: string): Promise<ParticleQ
 
   const result = await callClaudeJSON<ParticleQuizResult>(
     {
-      module: 'grader',
-      system: particleTutorSystemPrompt({ items }),
+      promptModule: 'particleTutor',
+      vars: { items } satisfies ParticleQuizInput,
       messages: [{ role: 'user', content: '請判斷這些句子的虛詞用法' }],
       maxTokens: 2500,
     },

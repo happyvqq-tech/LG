@@ -1,7 +1,7 @@
 // 聽力稿逐句中文翻譯的快取層：第一次要看中文才呼叫 AI，翻好存進
 // task_json.listening_translation，之後同一個任務不用再翻第二次
 import { callClaudeJSON } from './claude'
-import { makeIsTranslateResult, translateSystemPrompt } from './prompts/translate'
+import { makeIsTranslateResult, type TranslateInput } from './prompts/translate'
 import { updateTaskJson } from './taskService'
 import { splitSentences } from './speech'
 import { asTaskLanguage } from './types'
@@ -22,8 +22,8 @@ export async function ensureListeningTranslation(task: Task): Promise<{
   const language = asTaskLanguage(task.language)
   const result = await callClaudeJSON(
     {
-      module: 'grader',
-      system: translateSystemPrompt({ language, sentences }),
+      promptModule: 'translate',
+      vars: { language, sentences } satisfies TranslateInput,
       messages: [{ role: 'user', content: '請翻譯' }],
       maxTokens: 1500,
     },

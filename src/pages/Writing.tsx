@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import { syncTaskErrors } from '../lib/errorEngine'
-import { graderSystemPrompt, graderUserMessage, isGraderResult } from '../lib/prompts/grader'
+import { graderUserMessage, isGraderResult } from '../lib/prompts/grader'
 import { updateTaskJson } from '../lib/taskService'
 import { diffTokens } from '../lib/textDiff'
 import DrillModal from '../components/DrillModal'
@@ -58,8 +58,9 @@ export default function Writing() {
     try {
       const result = await callClaudeJSON<GraderResult>(
         {
-          module: 'grader',
-          system: graderSystemPrompt(language),
+          promptModule: 'grader',
+          // 這個模組的變數就是一個語言字串，沒有 Input 介面
+          vars: language,
           messages: [
             {
               role: 'user',

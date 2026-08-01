@@ -1,7 +1,7 @@
 // 週報資料層：抓近 30 天錯誤紀錄、呼叫 AI 生成 Markdown（不落地儲存，每次即時生成）
 import { supabase } from './supabase'
 import { callClaude } from './claude'
-import { weeklyReportSystemPrompt } from './prompts/weeklyReport'
+import { type WeeklyReportInput } from './prompts/weeklyReport'
 import { toDateString, addDays } from './srs'
 import type { ErrorRecord } from './types'
 
@@ -52,8 +52,8 @@ export async function generateWeeklyReport(
   if (errors.length === 0) return { markdown: '', errorCount: 0 }
 
   const text = await callClaude({
-    module: 'weeklyReport',
-    system: weeklyReportSystemPrompt({ profileName, language, errors }),
+    promptModule: 'weeklyReport',
+    vars: { profileName, language, errors } satisfies WeeklyReportInput,
     messages: [{ role: 'user', content: '請生成本週週報' }],
   })
   return { markdown: stripOuterFence(text), errorCount: errors.length }

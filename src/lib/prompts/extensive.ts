@@ -27,37 +27,6 @@ export interface ExtensiveInput {
   topic: string
 }
 
-export function extensiveSystemPrompt(input: ExtensiveInput): string {
-  return `你是語言學習教材編輯，正在製作「泛聽」材料。
-
-輸入變數：
-- 語言：${input.language}
-- 程度：${input.level}
-- 主題：${input.topic}
-
-泛聽的目的是「大量、輕鬆、聽得下去」，不是精讀精聽。硬性要求：
-
-1. 長度 600-900 字，內容連貫，有起承轉合——聽得下去比教得多重要
-2. 用字必須控制在 ${input.level} 以下：目標是學習者不查字典就能懂九成以上。
-   刻意用簡單的字，不要為了豐富度塞進罕見詞或艱深表達
-3. 句子放短、口語自然，像是有人在對你講話或說一段故事，不要寫成書面論說文
-4. 不要刻意堆疊文法點、不要為了教學而扭曲句子——這是泛聽，不是精聽
-5. 不要加標題以外的任何標記、不要分段編號、不要附註解或生字表
-6. ${
-    input.language === '日文'
-      ? '用丁寧體，漢字用常用漢字即可，不要用艱深的漢字詞'
-      : input.language === '韓文'
-        ? '用해요體，避免漢字語的艱深詞彙'
-        : '用日常口語的詞彙與句型，避免學術腔'
-  }
-
-只輸出 JSON，不加任何前言、不用 markdown 圍欄：
-{
-  "title": "十字以內的標題",
-  "script": "正文"
-}`
-}
-
 export interface ExtensiveResult {
   title: string
   script: string

@@ -5,7 +5,7 @@ import { useProfile } from '../lib/profileContext'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import {
   isReviewPracticeResult,
-  reviewPracticeSystemPrompt,
+  type ReviewPracticeInput,
   type ReviewPracticeResult,
 } from '../lib/prompts/reviewPractice'
 import PracticeQuiz from '../components/PracticeQuiz'
@@ -74,8 +74,8 @@ export default function ErrorReview() {
     try {
       const result = await callClaudeJSON<ReviewPracticeResult>(
         {
-          module: 'grader',
-          system: reviewPracticeSystemPrompt({
+          promptModule: 'reviewPractice',
+          vars: {
             language: language as TaskLanguage | '古文',
             errors: picked.map((r) => ({
               original: r.original,
@@ -84,7 +84,7 @@ export default function ErrorReview() {
               rule_note: r.rule_note,
               drill: [],
             })),
-          }),
+          } satisfies ReviewPracticeInput,
           messages: [{ role: 'user', content: '請出類似題' }],
           maxTokens: 3000,
         },

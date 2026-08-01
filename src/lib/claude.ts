@@ -51,22 +51,30 @@ export function probeAccessGateNeeded(): Promise<AccessCheckResult> {
   return checkAccessRequest(null)
 }
 
-export type ClaudeModule =
+/**
+ * Prompt 模組名稱。實際的 system prompt 內容與模型選擇都在 Worker
+ * （`worker/src/prompts/`），前端只送模組名與變數。
+ *
+ * 這份清單是「跨 HTTP 邊界的契約」，要跟 worker/src/prompts/index.ts 的
+ * PromptModule 保持一致。送出不認得的模組名，Worker 會回 400
+ * unknown_prompt_module，不會靜默送出一份空 prompt。
+ */
+export type PromptModule =
   | 'taskGenerator'
   | 'dialogPartner'
+  | 'discussPartner'
   | 'grader'
   | 'weeklyReport'
   | 'taigiScript'
-
-// module → model 對照與 max_tokens 預設（CLAUDE.md 第 5 節）
-const MODULE_CONFIG: Record<ClaudeModule, { model: string; maxTokens: number }> = {
-  taskGenerator: { model: 'claude-haiku-4-5', maxTokens: 3000 },
-  dialogPartner: { model: 'claude-haiku-4-5', maxTokens: 1024 },
-  grader: { model: 'claude-sonnet-4-6', maxTokens: 3000 },
-  weeklyReport: { model: 'claude-sonnet-4-6', maxTokens: 2000 },
-  // 台語漢字用字與台羅拼音要正確，這比一般任務生成難，用能力較強的模型
-  taigiScript: { model: 'claude-sonnet-4-6', maxTokens: 3000 },
-}
+  | 'translate'
+  | 'readingAid'
+  | 'extensive'
+  | 'quizGenerator'
+  | 'vocabEnrich'
+  | 'particleTutor'
+  | 'reviewPractice'
+  | 'classicalAnnotate'
+  | 'classicalTranslationGrade'
 
 export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse' | 'access_denied'
 
@@ -87,9 +95,15 @@ export class ClaudeError extends Error {
 }
 
 export interface CallClaudeArgs {
-  module: ClaudeModule
-  system: string
+  /** 要用哪個 prompt 模組；Worker 依此組裝 system prompt 並決定模型與 token 上限 */
+  promptModule: PromptModule
+  /**
+   * 填進 prompt 模板的變數。形狀由各模組在 `src/lib/prompts/` 的 Input 介面定義
+   * （那些介面留在前端就是為了讓這裡有型別可依），實際組裝在 Worker。
+   */
+  vars: unknown
   messages: ChatMessage[]
+  /** 只能往下調（省 token），超過模組預設上限的話 Worker 會夾回上限 */
   maxTokens?: number
 }
 
@@ -107,18 +121,15 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
       'AI 服務目前無法使用，請稍後再試',
     )
   }
-  const cfg = MODULE_CONFIG[args.module]
-
   let res: Response
   try {
     res = await fetch(`${workerUrl.replace(/\/$/, '')}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...accessHeaders() },
       body: JSON.stringify({
-        model: cfg.model,
-        system: args.system,
+        prompt: { module: args.promptModule, vars: args.vars },
         messages: args.messages,
-        max_tokens: args.maxTokens ?? cfg.maxTokens,
+        ...(args.maxTokens ? { max_tokens: args.maxTokens } : {}),
       }),
     })
   } catch {

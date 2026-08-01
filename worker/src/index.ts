@@ -3,6 +3,8 @@
  * 唯一職責：藏 API key、轉發上游、簡單限流（CLAUDE.md 第 2/3 節）
  */
 
+import { isPromptModule, resolvePrompt } from './prompts'
+
 export interface Env {
   ANTHROPIC_API_KEY: string
   ALLOWED_ORIGIN: string
@@ -18,10 +20,20 @@ export interface Env {
 }
 
 interface ChatRequestBody {
-  model: string
+  /** 新版：由 Worker 依模組組裝 system prompt 並決定模型（見 prompts/index.ts） */
+  prompt?: { module?: unknown; vars?: unknown }
+  /**
+   * 舊版：前端直接送完整的 system 與 model。
+   *
+   * 保留它不是為了相容性潔癖，是因為這是 PWA——Service Worker 會把舊版
+   * 前端的 JS 快取在使用者裝置上，家人手機裡可能好幾天都還跑著舊版。
+   * 舊前端配新 Worker 必須繼續能用，否則等於在他們沒做錯任何事的情況下
+   * 把 App 弄壞。等大家都更新過之後可以移除這條路徑。
+   */
+  model?: string
   system?: string
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
-  max_tokens: number
+  max_tokens?: number
 }
 
 interface TtsRequestBody {
@@ -74,7 +86,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 5
+const WORKER_VERSION = 6
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -565,8 +577,39 @@ export default {
       return jsonResponse({ error: 'invalid_json' }, 400, origin)
     }
 
-    if (!body.model || !Array.isArray(body.messages) || !body.max_tokens) {
-      return jsonResponse({ error: 'missing_fields', message: '需要 model / messages / max_tokens' }, 400, origin)
+    if (!Array.isArray(body.messages) || body.messages.length === 0) {
+      return jsonResponse({ error: 'missing_fields', message: '需要 messages' }, 400, origin)
+    }
+
+    let model: string
+    let system: string | undefined
+    let maxTokens: number
+
+    if (body.prompt) {
+      if (!isPromptModule(body.prompt.module)) {
+        return jsonResponse(
+          { error: 'unknown_prompt_module', message: `不認得的 prompt 模組：${String(body.prompt.module)}` },
+          400,
+          origin,
+        )
+      }
+      const resolved = resolvePrompt(body.prompt.module, body.prompt.vars)
+      model = resolved.model
+      system = resolved.system
+      // 前端可以往下調（例如省 token），但不能往上超過模組的預設上限
+      maxTokens = Math.min(body.max_tokens ?? resolved.maxTokens, resolved.maxTokens)
+    } else {
+      // 舊版路徑（見 ChatRequestBody 的說明）
+      if (!body.model || !body.max_tokens) {
+        return jsonResponse(
+          { error: 'missing_fields', message: '需要 prompt.module，或舊版的 model / max_tokens' },
+          400,
+          origin,
+        )
+      }
+      model = body.model
+      system = body.system
+      maxTokens = body.max_tokens
     }
 
     const upstream = await fetch(ANTHROPIC_URL, {
@@ -577,10 +620,10 @@ export default {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: body.model,
-        system: body.system,
+        model,
+        system,
         messages: body.messages,
-        max_tokens: body.max_tokens,
+        max_tokens: maxTokens,
       }),
     })
 

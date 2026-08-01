@@ -6,7 +6,7 @@ import { clearActiveTaskId, completeTask } from '../lib/taskService'
 import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import {
   isReviewPracticeResult,
-  reviewPracticeSystemPrompt,
+  type ReviewPracticeInput,
   type ReviewPracticeResult,
 } from '../lib/prompts/reviewPractice'
 import PracticeQuiz from '../components/PracticeQuiz'
@@ -72,8 +72,8 @@ export default function Feedback() {
       const language = asTaskLanguage(task.language)
       const result = await callClaudeJSON<ReviewPracticeResult>(
         {
-          module: 'grader',
-          system: reviewPracticeSystemPrompt({ language, errors: task.task_json.grading.errors }),
+          promptModule: 'reviewPractice',
+          vars: { language, errors: task.task_json.grading.errors } satisfies ReviewPracticeInput,
           messages: [{ role: 'user', content: '請出類似題' }],
         },
         isReviewPracticeResult,

@@ -2,7 +2,7 @@
 
 import { supabase } from './supabase'
 import { callClaudeJSON } from './claude'
-import { extensiveLevel, extensiveSystemPrompt, isExtensiveResult } from './prompts/extensive'
+import { extensiveLevel, type ExtensiveInput, isExtensiveResult } from './prompts/extensive'
 import type { ExtensiveListen, Level, TaskLanguage } from './types'
 
 export async function listExtensive(
@@ -50,8 +50,8 @@ export async function createExtensive(
   const easier = extensiveLevel(level)
   const result = await callClaudeJSON(
     {
-      module: 'taskGenerator',
-      system: extensiveSystemPrompt({ language, level: easier, topic }),
+      promptModule: 'extensive',
+      vars: { language, level: easier, topic } satisfies ExtensiveInput,
       messages: [{ role: 'user', content: '請生成一篇泛聽材料' }],
       maxTokens: 3000,
     },
