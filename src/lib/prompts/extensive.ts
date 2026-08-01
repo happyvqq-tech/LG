@@ -1,0 +1,73 @@
+// 泛聽教材生成
+//
+// 泛聽（extensive listening）跟精聽是兩件事，不該互相取代：
+//   精聽建立準確度——每個字都要聽懂，文法點要抓出來（＝現在的每日任務）
+//   泛聽建立自動化與語感——不查字典、不倒帶、聽個大概就好
+// 只有精聽的學習者會變成「每句都要想」：文法很好、考試很好，但講話卡。
+//
+// 為什麼要另外開一條通道：每日任務的聽力稿 150-250 字，一週約 1,500 字。
+// 要靠隱性學習習得一個詞需要 10-20 次遭遇（Nation、Webb），這個量級做不到。
+//
+// 最違反直覺、也最關鍵的一點：**泛聽的難度要低於學習者的程度**。
+// 泛聽要的是 98% 的詞都認得，讀起來不費力才聽得下去、也才累積得了量。
+// 用學習程度去生成泛聽材料，會得到一份「需要專心解碼」的東西，那又變回精聽了。
+
+import type { Level, TaskLanguage } from '../types'
+
+/** 泛聽用的程度：一律比學習程度低一級（A2 已經最低，維持不變） */
+export function extensiveLevel(level: Level): Level {
+  const down: Record<Level, Level> = { C1: 'B2', B2: 'B1', B1: 'A2', A2: 'A2' }
+  return down[level]
+}
+
+export interface ExtensiveInput {
+  language: TaskLanguage
+  /** 已經降過一級的程度，用 extensiveLevel() 取得 */
+  level: Level
+  topic: string
+}
+
+export function extensiveSystemPrompt(input: ExtensiveInput): string {
+  return `你是語言學習教材編輯，正在製作「泛聽」材料。
+
+輸入變數：
+- 語言：${input.language}
+- 程度：${input.level}
+- 主題：${input.topic}
+
+泛聽的目的是「大量、輕鬆、聽得下去」，不是精讀精聽。硬性要求：
+
+1. 長度 600-900 字，內容連貫，有起承轉合——聽得下去比教得多重要
+2. 用字必須控制在 ${input.level} 以下：目標是學習者不查字典就能懂九成以上。
+   刻意用簡單的字，不要為了豐富度塞進罕見詞或艱深表達
+3. 句子放短、口語自然，像是有人在對你講話或說一段故事，不要寫成書面論說文
+4. 不要刻意堆疊文法點、不要為了教學而扭曲句子——這是泛聽，不是精聽
+5. 不要加標題以外的任何標記、不要分段編號、不要附註解或生字表
+6. ${
+    input.language === '日文'
+      ? '用丁寧體，漢字用常用漢字即可，不要用艱深的漢字詞'
+      : input.language === '韓文'
+        ? '用해요體，避免漢字語的艱深詞彙'
+        : '用日常口語的詞彙與句型，避免學術腔'
+  }
+
+只輸出 JSON，不加任何前言、不用 markdown 圍欄：
+{
+  "title": "十字以內的標題",
+  "script": "正文"
+}`
+}
+
+export interface ExtensiveResult {
+  title: string
+  script: string
+}
+
+/** 長度下限設 300 是防「AI 只寫兩段就交差」——那樣就失去泛聽的意義了 */
+export function isExtensiveResult(v: unknown): v is ExtensiveResult {
+  if (typeof v !== 'object' || v === null) return false
+  const o = v as Record<string, unknown>
+  if (typeof o.title !== 'string' || o.title.trim() === '') return false
+  if (typeof o.script !== 'string' || o.script.trim().length < 300) return false
+  return true
+}

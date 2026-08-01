@@ -282,6 +282,26 @@ export default function TaskHome() {
           <span className="text-slate-300">→</span>
         </Link>
 
+        {/* 泛聽跟每日任務的精聽是兩件事：精聽建立準確度，泛聽建立自動化與語感。
+            每日任務一週只有約 1,500 字的輸入，靠那個量習得不了東西 */}
+        {hasTaskLanguage && (
+          <Link
+            to="/extensive"
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">🎧</span>
+              <span className="text-left">
+                <span className="block font-bold">泛聽</span>
+                <span className="block text-sm text-slate-500">
+                  長一點、簡單一點・聽個大概就好，沒有練習題
+                </span>
+              </span>
+            </span>
+            <span className="text-slate-300">→</span>
+          </Link>
+        )}
+
         <Link
           to="/vocab"
           className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"

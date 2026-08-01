@@ -13,6 +13,9 @@ import Speaking from './pages/Speaking'
 import SpeakingDiscuss from './pages/SpeakingDiscuss'
 import SpeakingRoleplay from './pages/SpeakingRoleplay'
 import Shadowing from './pages/Shadowing'
+import Fluency from './pages/Fluency'
+import ExtensiveHome from './pages/ExtensiveHome'
+import ExtensivePlayer from './pages/ExtensivePlayer'
 import Writing from './pages/Writing'
 import Feedback from './pages/Feedback'
 import VocabHome from './pages/VocabHome'
@@ -47,6 +50,9 @@ export default function App() {
       <Route path="/speaking/discuss" element={guarded(<SpeakingDiscuss />)} />
       <Route path="/speaking/roleplay" element={guarded(<SpeakingRoleplay />)} />
       <Route path="/shadowing" element={guarded(<Shadowing />)} />
+      <Route path="/fluency" element={guarded(<Fluency />)} />
+      <Route path="/extensive" element={guarded(<ExtensiveHome />)} />
+      <Route path="/extensive/:id" element={guarded(<ExtensivePlayer />)} />
       <Route path="/writing" element={guarded(<Writing />)} />
       <Route path="/feedback" element={guarded(<Feedback />)} />
       <Route path="/vocab" element={guarded(<VocabHome />)} />
