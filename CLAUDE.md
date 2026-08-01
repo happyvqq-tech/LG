@@ -52,6 +52,7 @@
 │   ├── pages/              # MemberSelect / TaskHome / Listening / Reading /
 │   │                       # Speaking / Writing / Feedback / GrammarDrill / Taiwanese
 │   │                       # TaskArchive / TaskReview（教材庫：翻閱過去任務複習，唯讀）
+│   │                       # BackTranslate（回譯：看中文產出目標語，再跟原句比對）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
@@ -59,6 +60,7 @@
 │   │   ├── speech.ts       # TTS/STT 統一入口（自動在 Google 與瀏覽器語音之間選擇）
 │   │   ├── googleTts.ts    # Google Cloud TTS 播放層（快取、預抓、失敗退回）
 │   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
+│   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
 │   │   └── prompts/        # 4 個 prompt 模組（見第 6 節，內容以本檔為準）
 │   └── data/
 │       └── grammar_points.ts  # 高中核心文法點種子清單
