@@ -40,28 +40,41 @@
    npm install
    npx wrangler login                        # 開瀏覽器授權
    npx wrangler secret put ANTHROPIC_API_KEY  # 貼上 Anthropic API key（sk-ant- 開頭）
-   npx wrangler secret put GOOGLE_TTS_API_KEY # 英日韓語音用，見下方第 7 點
-   npx wrangler secret put YATING_API_KEY     # 台語語音用，見下方第 6 點
+   npx wrangler secret put GOOGLE_TTS_API_KEY # 英日韓語音用，見下方第 8 點
+   npx wrangler secret put YATING_API_KEY     # 台語語音用，見下方第 7 點
    ```
 
-3. 編輯 `worker/wrangler.toml` 的 `ALLOWED_ORIGIN`：
+3. **設定 Worker 自動部署**（做過一次之後，之後合併就會自動更新 Worker）：
+   - Cloudflare → 右上頭像 → **My Profile → API Tokens → Create Token**
+     → 選 **Edit Cloudflare Workers** 範本 → 建立後複製那串 token
+   - GitHub repo → **Settings → Secrets and variables → Actions**
+     → **New repository secret** 新增 `CLOUDFLARE_API_TOKEN`（貼上剛才那串）
+   - 帳號底下有多個 Cloudflare account 時，再加一個 `CLOUDFLARE_ACCOUNT_ID`
+     （值在 Cloudflare 後台網址列 `/accounts/<這一段>`）
+   - 之後 `.github/workflows/deploy-worker.yml` 會在每次動到 `worker/` 時自動部署；
+     要手動重跑到 repo 的 **Actions → Deploy Worker → Run workflow**（手機也能按）
+
+   > **前端與 Worker 必須同步部署。** 前端送新格式而 Worker 還是舊版時，
+   > AI 功能會整個失效（`/health` 的 `worker_version` 就是用來對版本的）。
+
+4. 編輯 `worker/wrangler.toml` 的 `ALLOWED_ORIGIN`：
    改成你的 GitHub Pages 網域，例如 `https://happyvqq-tech.github.io`（結尾不加斜線、不含 repo 路徑）
-4. 部署並抄下網址：
+5. 部署並抄下網址：
 
    ```bash
    npx wrangler deploy
    # 輸出形如 https://lglearning-worker.<帳號>.workers.dev → 之後填 VITE_WORKER_URL
    ```
 
-5. Anthropic API key 申請處：<https://console.anthropic.com>（Settings → API Keys）
-6. 台語語音（雅婷 TTS）key 申請處：<https://developer.yating.tw>
+6. Anthropic API key 申請處：<https://console.anthropic.com>（Settings → API Keys）
+7. 台語語音（雅婷 TTS）key 申請處：<https://developer.yating.tw>
    - 註冊後在 Dev Console 建立一把 API key
    - 新會員有等值 NT$1,000 的試用點數
    - 只有台語用得到；沒設的話英日韓照常運作，只有台語模組會顯示
      「台語語音服務暫時無法使用」
    - 設好之後打開 `https://<你的worker網址>/health` 應該看到
      `"yating_key": "已設定（xx 字元）"`
-7. 英日韓語音（Google Cloud TTS）key 申請處：<https://console.cloud.google.com>
+8. 英日韓語音（Google Cloud TTS）key 申請處：<https://console.cloud.google.com>
    - 建立專案 → **API 和服務 → 程式庫** → 搜尋 `Cloud Text-to-Speech API` → 啟用
    - **憑證 → 建立憑證 → API 金鑰**，建好後點「編輯 API 金鑰」→ **API 限制**
      選「限制金鑰」→ 只勾 Cloud Text-to-Speech API（這把 key 只存在 Worker，
@@ -71,7 +84,7 @@
    - 沒設也不會壞：前端連續失敗三次後就整個 session 改用瀏覽器內建語音
    - 設好之後打開 `https://<你的worker網址>/health` 應該看到
      `"google_tts_key": "已設定（xx 字元）"`
-8. 通關密碼（防網址外流被盜用 API 額度）：
+9. 通關密碼（防網址外流被盜用 API 額度）：
 
    ```bash
    npx wrangler secret put ACCESS_PASSPHRASE   # 自訂一組全家共用的密碼
@@ -85,10 +98,10 @@
    - 想換密碼：重新 `wrangler secret put ACCESS_PASSPHRASE` 蓋掉舊的，
      所有裝置下次呼叫 AI 功能時會自動被登出、跳回輸入畫面
      （若已跑過 `migration-010`，資料庫那組也要同步改，見該檔的「換密碼」段）
-9. **設好密碼後**，回到第 1 節跑 `supabase/migration-010.sql`：
+10. **設好密碼後**，回到第 1 節跑 `supabase/migration-010.sql`：
    - 這一步把資料庫也擋起來。在此之前，任何人只要從前端 JS 撈出 anon key，
      就能直接讀寫甚至刪光全家的學習資料——CORS 和通關密碼都擋不住那條路
-   - 密碼要跟第 8 點設的**完全一樣**
+   - 密碼要跟第 9 點設的**完全一樣**
    - 順序很重要：先部署前端 → 設 Worker secret → 在網站輸入過一次密碼 → 才跑 SQL
 
 > 語音每合成一句就花一次額度，所以兩支 TTS 端點都用 Cloudflare Cache 快取。
@@ -163,6 +176,7 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 | 台語沒聲音、顯示「語音服務暫時無法使用」 | `YATING_API_KEY` 沒設或點數用完，打開 Worker 的 `/health` 確認 |
 | 台語腳本存不進去（column does not exist） | `migration-008.sql` 沒跑 |
 | 泛聽頁顯示「泛聽資料表還沒建立」 | `migration-009.sql` 沒跑 |
+| 生成任務／批改／翻譯全部失敗 | 前端與 Worker 版本不同步。開 `/health` 看 `worker_version`，跟 `worker/src/index.ts` 裡的 `WORKER_VERSION` 對不上就是 Worker 沒部署，到 Actions 頁跑 **Deploy Worker** |
 | 跑完 `migration-010` 後首頁一個成員都看不到 | 資料庫的密碼跟你輸入的不一致，或還沒在網站輸入過密碼。先確認 `app_secrets` 裡的值與 `ACCESS_PASSPHRASE` 相同；真的進不去用 `migration-010.sql` 最後面的「緊急還原」 |
 | 台語跟讀按了沒反應 | 瀏覽器擋掉麥克風權限；Chrome 需在 https 或 localhost 下才給錄音 |
 | 開站一直卡在密碼畫面，密碼明明是對的 | 檢查 `wrangler secret put ACCESS_PASSPHRASE` 有沒有打錯字或多打了空白；改完密碼要 `wrangler deploy` 才生效 |
