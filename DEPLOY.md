@@ -86,9 +86,11 @@
 
 3. 把程式合併/推到 `main` branch → Actions 會自動 build 並部署
    （也可到 Actions 頁手動 Run workflow）
-4. 完成後網址為 `https://<帳號>.github.io/lglearning/`
+4. 完成後網址為 `https://<帳號>.github.io/<repo名>/`，目前是
+   <https://happyvqq-tech.github.io/LG/>
 
-> 若 repo 改名，記得同步改 `vite.config.ts` 裡的 `base: '/lglearning/'`。
+> **repo 改名的話一定要同步改三個地方**，否則頁面會整個空白（而 Actions 仍顯示部署成功）：
+> `vite.config.ts` 的 `base`、本節的網址、`src/lib/ics.ts` 行事曆提醒裡的連結。
 
 ## 4. 手機安裝（PWA）
 

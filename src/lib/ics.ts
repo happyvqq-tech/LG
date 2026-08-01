@@ -91,7 +91,7 @@ export function buildStudyPlanIcs(profile: Profile, plan: DailyPlan, now = new D
     foldLine(`SUMMARY:${escapeText(`${profile.name} 的語言學習（${langs}）`)}`),
     foldLine(
       `DESCRIPTION:${escapeText(
-        `今天練 ${plan.minutes} 分鐘：聽 → 讀 → 說 → 寫\n開啟 https://happyvqq-tech.github.io/lglearning/`,
+        `今天練 ${plan.minutes} 分鐘：聽 → 讀 → 說 → 寫\n開啟 https://happyvqq-tech.github.io/LG/`,
       )}`,
     ),
     'BEGIN:VALARM',
