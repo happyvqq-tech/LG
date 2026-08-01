@@ -7,10 +7,10 @@ import { getIndexEntry, getNotes, getProgress, getText, saveProgress } from '../
 import { syncClassicalErrors } from '../lib/classicalErrorEngine'
 import { logActivity } from '../lib/streakService'
 import {
-  annotateSystemPrompt,
+  type AnnotateInput,
   isAnnotateResult,
   isTranslationGradeResult,
-  translationGraderSystemPrompt,
+  type TranslationGradeInput,
   type AnnotateResult,
   type TranslationGradeResult,
 } from '../lib/prompts/classicalTutor'
@@ -157,13 +157,13 @@ export default function ClassicalRead() {
     try {
       const result = await callClaudeJSON<AnnotateResult>(
         {
-          module: 'grader',
-          system: annotateSystemPrompt({
+          promptModule: 'classicalAnnotate',
+          vars: {
             title: entry!.title,
             source: entry!.source,
             passage,
             level: entry!.level,
-          }),
+          } satisfies AnnotateInput,
           messages: [{ role: 'user', content: '請講解本段' }],
           maxTokens: 3000,
         },
@@ -185,13 +185,13 @@ export default function ClassicalRead() {
     try {
       const result = await callClaudeJSON<TranslationGradeResult>(
         {
-          module: 'grader',
-          system: translationGraderSystemPrompt({
+          promptModule: 'classicalTranslationGrade',
+          vars: {
             title: entry!.title,
             passage,
             userTranslation: userTranslation.trim(),
             level: entry!.level,
-          }),
+          } satisfies TranslationGradeInput,
           messages: [{ role: 'user', content: '請批改' }],
           maxTokens: 3000,
         },

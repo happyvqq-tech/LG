@@ -7,7 +7,7 @@ import { callClaudeJSON } from './claude'
 import {
   makeIsReadingAidResult,
   readingAidSupported,
-  readingAidSystemPrompt,
+  type ReadingAidInput,
 } from './prompts/readingAid'
 import { updateTaskJson } from './taskService'
 import { splitSentences } from './speech'
@@ -34,8 +34,8 @@ export async function ensureReadingAid(task: Task): Promise<{
   const language = asTaskLanguage(task.language)
   const result = await callClaudeJSON(
     {
-      module: 'grader',
-      system: readingAidSystemPrompt({ language, sentences }),
+      promptModule: 'readingAid',
+      vars: { language, sentences } satisfies ReadingAidInput,
       messages: [{ role: 'user', content: '請標註讀音' }],
       maxTokens: 2000,
     },

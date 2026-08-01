@@ -9,26 +9,6 @@ export interface TranslateInput {
   sentences: string[]
 }
 
-export function translateSystemPrompt(input: TranslateInput): string {
-  const numbered = input.sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')
-
-  return `你是${input.language}翻譯，服務對象為台灣的語言學習者。
-
-以下是一段聽力稿，已經照原本順序切成 ${input.sentences.length} 句：
-${numbered}
-
-請把每一句翻成自然、道地的繁體中文（不要逐字硬翻），供學習者聽完後對照理解用。
-
-硬性要求：
-1. translations 陣列長度必須剛好 ${input.sentences.length}，順序跟原句一一對應，不可合併或拆開句子
-2. 翻譯以達意、通順為主，不用附註解或原文
-
-只輸出 JSON，不加任何前言、不用 markdown 圍欄：
-{
-  "translations": ["第一句翻譯", "第二句翻譯"]
-}`
-}
-
 export interface TranslateResult {
   translations: string[]
 }

@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
-import { DISCUSS_BOOTSTRAP, discussPartnerSystemPrompt } from '../lib/prompts/discussPartner'
+import { DISCUSS_BOOTSTRAP, type DiscussPartnerInput } from '../lib/prompts/discussPartner'
 import { updateTaskJson } from '../lib/taskService'
 import { stopSpeaking } from '../lib/speech'
 import TaskNav from '../components/TaskNav'
@@ -16,14 +16,19 @@ export default function SpeakingDiscuss() {
   const { task, setTask, loading } = useActiveTask()
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
-  const systemPrompt = useMemo(() => {
-    if (!task) return ''
-    return discussPartnerSystemPrompt({
-      language: asTaskLanguage(task.language),
-      scenarioTitle: task.task_json.scenario_title,
-      passage: task.task_json.listening_script,
-    })
-  }, [task])
+  const prompt = useMemo(
+    () => ({
+      module: 'discussPartner' as const,
+      vars: task
+        ? ({
+            language: asTaskLanguage(task.language),
+            scenarioTitle: task.task_json.scenario_title,
+            passage: task.task_json.listening_script,
+          } satisfies DiscussPartnerInput)
+        : null,
+    }),
+    [task],
+  )
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
 
@@ -51,7 +56,7 @@ export default function SpeakingDiscuss() {
 
       <VoiceChat
         language={task.language}
-        systemPrompt={systemPrompt}
+        prompt={prompt}
         bootstrap={DISCUSS_BOOTSTRAP}
         initialMessages={task.task_json.discuss_transcript ?? []}
         onMessages={(messages) => {

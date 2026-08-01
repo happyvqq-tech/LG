@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 import { callClaudeJSON } from './claude'
 import {
   isQuizGenResult,
-  quizGeneratorSystemPrompt,
+  type QuizGenInput,
   sanitizeSentence,
   type QuizGenResult,
 } from './prompts/quizGenerator'
@@ -87,13 +87,13 @@ export async function generateQuiz(
 ): Promise<QuizQuestion[]> {
   const result = await callClaudeJSON<QuizGenResult>(
     {
-      module: 'grader',
-      system: quizGeneratorSystemPrompt({
+      promptModule: 'quizGenerator',
+      vars: {
         language: asTaskLanguage(language),
         exam,
         examLevel,
         cards,
-      }),
+      } satisfies QuizGenInput,
       messages: [{ role: 'user', content: '請出題' }],
       maxTokens: 3000,
     },

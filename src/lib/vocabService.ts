@@ -4,7 +4,7 @@ import { callClaudeJSON } from './claude'
 import {
   isVocabEnrichResult,
   normalizeEnriched,
-  vocabEnrichSystemPrompt,
+  type VocabEnrichInput,
   type VocabEnrichResult,
 } from './prompts/vocabEnrich'
 import { seedsFor, type ExamSystem } from '../data/vocabLists'
@@ -94,15 +94,15 @@ export async function addNewCards(
   const fromList = seeds.length > 0
   const result = await callClaudeJSON<VocabEnrichResult>(
     {
-      module: 'taskGenerator',
-      system: vocabEnrichSystemPrompt({
+      promptModule: 'vocabEnrich',
+      vars: {
         language: asTaskLanguage(language),
         exam,
         examLevel,
         seeds,
         count: wanted,
         known,
-      }),
+      } satisfies VocabEnrichInput,
       messages: [{ role: 'user', content: fromList ? '請補完這批單字' : '請產生新單字' }],
       maxTokens: 3000,
     },

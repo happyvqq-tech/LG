@@ -51,6 +51,7 @@
 ├── BUILD_STEPS.md          # 分步指令包
 ├── worker/                 # Cloudflare Worker（獨立 wrangler 專案）
 │   ├── src/index.ts
+│   ├── src/prompts/        # 全部 15 個 system prompt 與模型選擇（見第 6 節）
 │   └── wrangler.toml
 ├── src/
 │   ├── pages/              # MemberSelect / TaskHome / Listening / Reading /
@@ -69,7 +70,8 @@
 │   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
 │   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
-│   │   └── prompts/        # 4 個 prompt 模組（見第 6 節，內容以本檔為準）
+│   │   └── prompts/        # 只剩「輸入介面 + 回應驗證函式」；
+│   │                       # system prompt 本文在 worker/src/prompts/（見第 6 節）
 │   └── data/
 │       └── grammar_points.ts  # 高中核心文法點種子清單
 └── supabase/schema.sql
@@ -92,7 +94,21 @@
 
 ## 6. Prompt 模組（完整內容）
 
-以下為四個模組的 system prompt 基準版本，實作放在 `src/lib/prompts/`，可微調但不得刪除核心要求。
+以下為四個核心模組的 system prompt 基準版本。**實作放在 `worker/src/prompts/`**，可微調但不得刪除核心要求。
+
+### prompt 為什麼在 Worker 而不在前端
+
+前端的 JS 一定會下載到訪客瀏覽器。prompt 放前端時，任何人按 F12 搜關鍵字就能把
+全部 15 個模組的完整內容複製走——不用 clone repo。而這個專案真正花過腦子的就是
+prompt 設計，React 元件反而是通用零件。搬到 Worker 之後瀏覽器只看得到模組名與變數。
+
+附帶好處：改 prompt 只要 `wrangler deploy`（約 5 秒），不用重跑整個前端 build；
+模型選擇也一併搬過去，前端不再能指定 `model`。
+
+**分工**：`worker/src/prompts/` 放 system prompt 本文與模型/max_tokens；
+`src/lib/prompts/` 只留「輸入介面」（讓呼叫端有型別可依）與「回應驗證函式」
+（解析用，不是機密）。新增模組時兩邊都要加，並在 `worker/src/prompts/index.ts`
+的 `PromptModule` 與 `src/lib/claude.ts` 的同名型別登錄。
 
 ### 6.1 任務生成器（taskGenerator）
 

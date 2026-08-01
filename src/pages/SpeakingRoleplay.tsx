@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
-import { DIALOG_BOOTSTRAP, dialogPartnerSystemPrompt } from '../lib/prompts/dialogPartner'
+import { DIALOG_BOOTSTRAP, type DialogPartnerInput } from '../lib/prompts/dialogPartner'
 import { updateTaskJson } from '../lib/taskService'
 import { stopSpeaking } from '../lib/speech'
 import TaskNav from '../components/TaskNav'
@@ -16,14 +16,19 @@ export default function SpeakingRoleplay() {
   const { task, setTask, loading } = useActiveTask()
   const { level: speedLevel, rate, setLevel: setSpeedLevel } = useSpeechRate()
 
-  const systemPrompt = useMemo(() => {
-    if (!task) return ''
-    return dialogPartnerSystemPrompt({
-      language: asTaskLanguage(task.language),
-      roleSetup: task.task_json.speaking_role_setup,
-      goal: task.task_json.speaking_goal,
-    })
-  }, [task])
+  const prompt = useMemo(
+    () => ({
+      module: 'dialogPartner' as const,
+      vars: task
+        ? ({
+            language: asTaskLanguage(task.language),
+            roleSetup: task.task_json.speaking_role_setup,
+            goal: task.task_json.speaking_goal,
+          } satisfies DialogPartnerInput)
+        : null,
+    }),
+    [task],
+  )
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
 
@@ -51,7 +56,7 @@ export default function SpeakingRoleplay() {
 
       <VoiceChat
         language={task.language}
-        systemPrompt={systemPrompt}
+        prompt={prompt}
         bootstrap={DIALOG_BOOTSTRAP}
         initialMessages={task.task_json.speaking_transcript ?? []}
         onMessages={(messages) => {
