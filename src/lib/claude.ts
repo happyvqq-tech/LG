@@ -2,6 +2,54 @@
 // 元件內禁止直接 fetch Worker，一律經過本模組
 
 import type { ChatMessage } from './types'
+import { clearAccessPassphrase, loadAccessPassphrase } from './accessGate'
+
+/** 前端夾帶通關密碼的 header 名稱，要跟 worker/src/index.ts 的 ACCESS_HEADER 一致 */
+const ACCESS_HEADER = 'x-lgl-access'
+
+/** 有存密碼就夾帶；沒設定通關密碼的部署收到這個 header 也不會怎樣，Worker 端會忽略 */
+function accessHeaders(): Record<string, string> {
+  const passphrase = loadAccessPassphrase()
+  return passphrase ? { [ACCESS_HEADER]: passphrase } : {}
+}
+
+export type AccessCheckResult = 'ok' | 'wrong' | 'unreachable'
+
+async function checkAccessRequest(passphrase: string | null): Promise<AccessCheckResult> {
+  const workerUrl = import.meta.env.VITE_WORKER_URL
+  if (!workerUrl) return 'unreachable'
+  try {
+    const res = await fetch(`${workerUrl.replace(/\/$/, '')}/api/verify-access`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(passphrase ? { [ACCESS_HEADER]: passphrase } : {}),
+      },
+      body: '{}',
+    })
+    if (res.ok) return 'ok'
+    return res.status === 401 ? 'wrong' : 'unreachable'
+  } catch {
+    return 'unreachable'
+  }
+}
+
+/**
+ * 跟 Worker 確認這組通關密碼對不對——給 AccessGate 畫面用，
+ * 讓使用者一輸入就知道密碼錯了，不用等到真的送出任務生成才發現。
+ */
+export function verifyAccessPassphrase(passphrase: string): Promise<AccessCheckResult> {
+  return checkAccessRequest(passphrase)
+}
+
+/**
+ * 探測這個部署到底有沒有開通關密碼功能。沒設定 ACCESS_PASSPHRASE 的部署
+ * （沒特別選過 A 方案的家庭）不該平白多一道要輸入密碼的畫面——這支不帶
+ * 密碼去問，Worker 沒設定就會直接放行，代表這道關卡本來就沒啟用。
+ */
+export function probeAccessGateNeeded(): Promise<AccessCheckResult> {
+  return checkAccessRequest(null)
+}
 
 export type ClaudeModule =
   | 'taskGenerator'
@@ -20,7 +68,7 @@ const MODULE_CONFIG: Record<ClaudeModule, { model: string; maxTokens: number }> 
   taigiScript: { model: 'claude-sonnet-4-6', maxTokens: 3000 },
 }
 
-export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse'
+export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse' | 'access_denied'
 
 export class ClaudeError extends Error {
   kind: ClaudeErrorKind
@@ -65,7 +113,7 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
   try {
     res = await fetch(`${workerUrl.replace(/\/$/, '')}/api/chat`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...accessHeaders() },
       body: JSON.stringify({
         model: cfg.model,
         system: args.system,
@@ -83,6 +131,7 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
   if (!res.ok) {
     // 兩種錯誤格式：Anthropic 的 {error:{message}}、Worker 自己的 {error:'code', message}
     let detail = ''
+    let errorCode = ''
     try {
       const j = (await res.json()) as {
         error?: string | { message?: string }
@@ -91,8 +140,17 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
       if (typeof j.error === 'object' && j.error?.message) detail = j.error.message
       else if (j.message) detail = j.message
       else if (typeof j.error === 'string') detail = j.error
+      if (typeof j.error === 'string') errorCode = j.error
     } catch {
       // 非 JSON 錯誤內容，僅回報狀態碼
+    }
+    if (res.status === 401 && errorCode === 'access_denied') {
+      // 密碼被家人在別的裝置改掉，或本機存的密碼已經失效——清掉重來，
+      // 並重新整理讓 AccessGate 重新掛載、讀到清空後的 localStorage，
+      // 使用者會直接回到輸入畫面，而不是卡在一句看不懂的「AI 服務錯誤」
+      clearAccessPassphrase()
+      window.location.reload()
+      throw new ClaudeError('access_denied', '通關密碼已失效', '通關密碼已變更，請重新輸入')
     }
     if (res.status === 529 || res.status === 503) {
       throw new ClaudeError('api', 'AI 服務忙碌中，稍等幾秒再按重試')
