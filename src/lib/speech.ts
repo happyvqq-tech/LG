@@ -1,9 +1,24 @@
-// 瀏覽器語音封裝：TTS（speechSynthesis）與 STT（SpeechRecognition）
-// 第一階段不串任何付費語音 API（CLAUDE.md 第 2 節）
+// 語音封裝：TTS 與 STT（SpeechRecognition）
+//
+// TTS 有兩條路，全站所有播放都走這裡，呼叫端不必知道差別：
+//   1. Google Cloud TTS（英日韓）——音質高且各裝置一致，是預設路線
+//   2. 瀏覽器 speechSynthesis——古文、台語佔位，以及 Google 不可用時的退路
+//
+// 「Google 不可用」包含：功能開關關閉、沒設 VITE_WORKER_URL、Worker 沒有金鑰、
+// 沒網路、額度用完、iOS 擋下自動播放。任何一種情況都會安靜地退回瀏覽器語音，
+// 不會讓使用者看到錯誤，也不會讓頁面卡住。
 
-import type { Language } from './types'
+import { isTaskLanguage, type Language } from './types'
 import { filterByLang, sortByQuality, type VoiceLike } from './voiceScore'
-import { loadVoicePref } from './voicePref'
+import { loadVoiceChoice } from './voicePref'
+import {
+  googleTtsAvailable,
+  pickGoogleVoice,
+  playGoogleSequence,
+  playGoogleTimed,
+  stopGoogle,
+  unlockGoogleAudio,
+} from './googleTts'
 
 export const LANG_CODE: Record<Language, string> = {
   英文: 'en-US',
@@ -17,8 +32,17 @@ export const LANG_CODE: Record<Language, string> = {
 
 // ---------------- TTS ----------------
 
-export function ttsSupported(): boolean {
+/** 這台瀏覽器有沒有 speechSynthesis（Google 路線不需要它） */
+function browserTtsSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window
+}
+
+/**
+ * 這個頁面到底有沒有辦法發出聲音——UI 的「不支援語音播放」警告以此為準。
+ * 只要 Google 那條路可能通，就算瀏覽器沒有 speechSynthesis 也還是有聲音。
+ */
+export function ttsSupported(): boolean {
+  return browserTtsSupported() || googleTtsAvailable()
 }
 
 let voicesCache: SpeechSynthesisVoice[] = []
@@ -69,17 +93,35 @@ export async function pickVoice(lang: Language): Promise<SpeechSynthesisVoice | 
   const sorted = await listVoices(lang)
   if (sorted.length === 0) return null
 
-  const preferredURI = loadVoicePref(lang)
-  if (preferredURI) {
+  const choice = loadVoiceChoice(lang)
+  // 使用者挑的是 Google 音色時，這裡不該拿它去比對裝置語音——那一定找不到，
+  // 而走到這個函式就代表 Google 那條路已經不通，改用自動挑選的裝置語音
+  if (choice?.kind === 'device') {
     // 使用者選的語音可能已被系統移除（例如刪掉下載的語音包），找不到就回頭自動挑
-    const chosen = sorted.find((v) => v.voiceURI === preferredURI)
+    const chosen = sorted.find((v) => v.voiceURI === choice.voiceURI)
     if (chosen) return chosen
   }
   return sorted[0]
 }
 
 export function stopSpeaking(): void {
-  if (ttsSupported()) window.speechSynthesis.cancel()
+  // 兩條路都要停：使用者按暫停時不知道現在這句是哪個引擎在唸
+  stopGoogle()
+  if (browserTtsSupported()) window.speechSynthesis.cancel()
+}
+
+/**
+ * 決定這次要用的 Google 音色；回 null 代表這句話該走瀏覽器語音。
+ *
+ * 只有英日韓走 Google（CLAUDE.md 第 2 節）：古文用國語語音誦讀、
+ * 台語有自己的雅婷路線，兩者都不該打到這裡。
+ */
+async function googleVoiceFor(lang: Language): Promise<string | null> {
+  if (!googleTtsAvailable() || !isTaskLanguage(lang)) return null
+  const choice = loadVoiceChoice(lang)
+  // 使用者明確挑了這台裝置上的語音，就尊重他的選擇，不要硬塞雲端語音
+  if (choice?.kind === 'device') return null
+  return pickGoogleVoice(lang, choice?.kind === 'google' ? choice.name : null)
 }
 
 /**
@@ -87,7 +129,35 @@ export function stopSpeaking(): void {
  * 被 cancel/interrupt 時也 resolve（由呼叫端的 session 機制決定是否繼續）。
  */
 export async function speak(text: string, lang: Language, rate = 1): Promise<void> {
-  if (!ttsSupported()) throw new Error('此瀏覽器不支援語音播放，請改用 Chrome 或 Edge')
+  await speakMeasured(text, lang, rate)
+}
+
+/**
+ * 唸出一段文字，並回報「實際發聲」的毫秒數（跟讀評分要用來比節奏）。
+ *
+ * 兩條路都刻意排除抓檔、挑語音、排隊的時間——那些跟「這句話唸多久」無關，
+ * 混進去會讓 prosodyScore 的 timing 訊號變成在量網路速度。被中斷時回 0，
+ * 呼叫端要當成「沒有這個訊號」而不是「唸了 0 毫秒」。
+ */
+export async function speakMeasured(text: string, lang: Language, rate = 1): Promise<number> {
+  // 必須在第一個 await 之前同步呼叫：iOS 只認使用者手勢當下的那個 task（見 googleTts.ts）
+  unlockGoogleAudio()
+
+  const googleVoice = await googleVoiceFor(lang)
+  if (googleVoice) {
+    try {
+      return await playGoogleTimed(text, googleVoice, rate)
+    } catch {
+      // 退回瀏覽器語音。不把錯誤丟給使用者——他要的是聽到聲音，
+      // 不是知道雲端語音掛了；連續失敗會由 googleTts 那邊自動停用整個 session
+    }
+  }
+  return speakBrowser(text, lang, rate)
+}
+
+/** 瀏覽器 speechSynthesis 路線，回傳從 onstart 到 onend 的毫秒數 */
+async function speakBrowser(text: string, lang: Language, rate: number): Promise<number> {
+  if (!browserTtsSupported()) throw new Error('此瀏覽器不支援語音播放，請改用 Chrome 或 Edge')
   stopSpeaking()
   const utter = new SpeechSynthesisUtterance(text)
   utter.lang = LANG_CODE[lang]
@@ -95,9 +165,15 @@ export async function speak(text: string, lang: Language, rate = 1): Promise<voi
   if (voice) utter.voice = voice
   utter.rate = rate
   return new Promise((resolve, reject) => {
-    utter.onend = () => resolve()
+    // speechSynthesis 沒有「這段音多長」可問，只能量 wall clock；
+    // 但從 onstart 起算至少排除了佇列等待，比從呼叫端起算準得多
+    let startedAt = 0
+    utter.onstart = () => {
+      startedAt = performance.now()
+    }
+    utter.onend = () => resolve(startedAt > 0 ? performance.now() - startedAt : 0)
     utter.onerror = (e) => {
-      if (e.error === 'canceled' || e.error === 'interrupted') resolve()
+      if (e.error === 'canceled' || e.error === 'interrupted') resolve(0)
       else reject(new Error(`語音播放失敗：${e.error}`))
     }
     window.speechSynthesis.speak(utter)
@@ -121,8 +197,20 @@ export async function speakSequence(
   rate = 1,
   onIndex?: (index: number) => void,
 ): Promise<void> {
-  if (!ttsSupported()) throw new Error('此瀏覽器不支援語音播放，請改用 Chrome 或 Edge')
   if (texts.length === 0) return
+  unlockGoogleAudio() // 同 speak()，必須在第一個 await 之前
+
+  const googleVoice = await googleVoiceFor(lang)
+  if (googleVoice) {
+    try {
+      await playGoogleSequence(texts, googleVoice, rate, onIndex)
+      return
+    } catch {
+      // 同 speak()：安靜退回瀏覽器語音
+    }
+  }
+
+  if (!browserTtsSupported()) throw new Error('此瀏覽器不支援語音播放，請改用 Chrome 或 Edge')
   stopSpeaking()
 
   const voice = await pickVoice(lang)

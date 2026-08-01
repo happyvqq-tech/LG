@@ -13,8 +13,6 @@
 - **使用者**：2～4 位家庭成員，程度 B1+ 起跳（高中以上）
 - **核心理念**：任務式循環（聽 → 讀 → 說 → 寫）＋ 個人錯誤記憶庫 ＋ 文法點驅動
 - **無登入系統**：首頁選擇成員即可，不做帳號密碼、不做付費、不做多租戶
-- **通關密碼（選配）**：全家共用一組密碼，擋在 Worker 的 `/api/chat`、`/api/tts`
-  前面，只為了防網址外流被陌生人盜用 API 額度，不是帳號系統，見 `ACCESS_GATE_MEMO.md`
 
 ## 2. 技術棧（不可擅自更換）
 
@@ -26,7 +24,8 @@
 | 後端 | Cloudflare Workers（唯一職責：藏 API key、轉發 Claude API、簡單限流） |
 | 資料庫 | Supabase 免費版（PostgreSQL），前端用 anon key 直連 |
 | AI | Anthropic Claude API（模型見第 5 節） |
-| 語音 | 英日韓古文用瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT） |
+| 英日韓語音（TTS） | Google Cloud TTS（`texttospeech.googleapis.com`），經 Worker `/api/gtts` 代理，key 存 Worker secret；不可用時自動退回 speechSynthesis |
+| 古文語音・所有 STT | 瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT） |
 | 台語語音 | 雅婷 TTS（`tts.api.yating.tw`），經 Worker `/api/tts` 代理，key 存 Worker secret |
 
 ## 3. 架構
@@ -35,6 +34,7 @@
 瀏覽器 PWA (GitHub Pages)
    ├── Supabase JS client ──→ Supabase（profiles / tasks / errors / grammar_points）
    ├── fetch ──→ Cloudflare Worker /api/chat ──→ api.anthropic.com /v1/messages
+   ├── fetch ──→ Cloudflare Worker /api/gtts ──→ texttospeech.googleapis.com（英日韓語音，含快取）
    └── fetch ──→ Cloudflare Worker /api/tts  ──→ tts.api.yating.tw（台語語音，含快取）
                      （API key 存在 Worker 環境變數，絕不出現在前端程式碼）
 ```
@@ -55,7 +55,9 @@
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
 │   │   ├── supabase.ts
-│   │   ├── speech.ts       # TTS/STT 封裝（瀏覽器 API）
+│   │   ├── speech.ts       # TTS/STT 統一入口（自動在 Google 與瀏覽器語音之間選擇）
+│   │   ├── googleTts.ts    # Google Cloud TTS 播放層（快取、預抓、失敗退回）
+│   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
 │   │   └── prompts/        # 4 個 prompt 模組（見第 6 節，內容以本檔為準）
 │   └── data/
 │       └── grammar_points.ts  # 高中核心文法點種子清單
@@ -194,7 +196,7 @@
 |---|---|---|
 | Worker | `ANTHROPIC_API_KEY` | wrangler secret，絕不進 git |
 | Worker | `YATING_API_KEY` | wrangler secret，台語語音；沒設只影響台語 |
-| Worker | `ACCESS_PASSPHRASE` | wrangler secret，選配；沒設就是預設狀態（任何人拿到網址都能用），見 `ACCESS_GATE_MEMO.md` |
+| Worker | `GOOGLE_TTS_API_KEY` | wrangler secret，英日韓語音；沒設會自動退回瀏覽器內建語音，不會壞掉 |
 | Worker | `ALLOWED_ORIGIN` | GitHub Pages 網址，CORS 白名單 |
 | 前端 `.env` | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase 連線 |
 | 前端 `.env` | `VITE_WORKER_URL` | Worker 端點 |
@@ -204,9 +206,11 @@
 ## 10. 禁止事項
 
 - 不做登入/註冊/金流/多租戶
-  （選配的 `ACCESS_PASSPHRASE` 通關密碼不算：全家共用一組密碼，沒有帳號、
-  沒有使用者資料、沒有後台審核，只是擋在 Worker 前面防網址外流，見 `ACCESS_GATE_MEMO.md`）
-- 不引入付費語音 API（台語雅婷除外——使用者已於 2026-07 明確同意，已實作但預設關閉）
+- 不引入付費語音 API，以下兩個是使用者明確同意的例外：
+  - 台語雅婷（2026-07 同意）——已實作但預設關閉
+  - 英日韓 Google Cloud TTS（2026-08 同意）——聽力與口說對話都用它，每月前 100 萬字元免費，
+    家庭用量約 12 萬；一律 1.0 倍速合成（語速交給前端 `playbackRate`）以維持快取命中率
+- 不引入付費語音「評測」API（Azure Pronunciation Assessment 等）——使用者於 2026-08 決定不做發音評分
 - 不在前端暴露任何 API key（Supabase anon key 除外，屬設計內公開）
 - 不擅自升級/更換主要框架與模型字串
 - 不生成與任務無關的大量教材塞進資料庫

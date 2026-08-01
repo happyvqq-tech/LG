@@ -35,8 +35,9 @@
    cd worker
    npm install
    npx wrangler login                        # 開瀏覽器授權
-   npx wrangler secret put ANTHROPIC_API_KEY # 貼上 Anthropic API key（sk-ant- 開頭）
-   npx wrangler secret put YATING_API_KEY    # 台語語音用，見下方第 6 點
+   npx wrangler secret put ANTHROPIC_API_KEY  # 貼上 Anthropic API key（sk-ant- 開頭）
+   npx wrangler secret put GOOGLE_TTS_API_KEY # 英日韓語音用，見下方第 7 點
+   npx wrangler secret put YATING_API_KEY     # 台語語音用，見下方第 6 點
    ```
 
 3. 編輯 `worker/wrangler.toml` 的 `ALLOWED_ORIGIN`：
@@ -56,24 +57,21 @@
      「台語語音服務暫時無法使用」
    - 設好之後打開 `https://<你的worker網址>/health` 應該看到
      `"yating_key": "已設定（xx 字元）"`
-7. 通關密碼（選配，防網址外流被盜用 API 額度）：
+7. 英日韓語音（Google Cloud TTS）key 申請處：<https://console.cloud.google.com>
+   - 建立專案 → **API 和服務 → 程式庫** → 搜尋 `Cloud Text-to-Speech API` → 啟用
+   - **憑證 → 建立憑證 → API 金鑰**，建好後點「編輯 API 金鑰」→ **API 限制**
+     選「限制金鑰」→ 只勾 Cloud Text-to-Speech API（這把 key 只存在 Worker，
+     不會出現在前端，但還是要限制住）
+   - 需要在專案上啟用帳單才能呼叫，但**每月前 100 萬字元免費**，
+     四人家庭每天一個任務約 12 萬字元/月。建議到「帳單 → 預算與快訊」設一個預算警示
+   - 沒設也不會壞：前端連續失敗三次後就整個 session 改用瀏覽器內建語音
+   - 設好之後打開 `https://<你的worker網址>/health` 應該看到
+     `"google_tts_key": "已設定（xx 字元）"`
 
-   ```bash
-   npx wrangler secret put ACCESS_PASSPHRASE   # 自訂一組全家共用的密碼
-   ```
-
-   - 這**不是帳號系統**，全家共用同一組密碼，只是擋在 `/api/chat`、`/api/tts`
-     前面，避免陌生人拿到網址後亂用把 Anthropic／雅婷的額度燒光
-   - 設定後前端第一次開站會跳出輸入畫面，輸對一次後存在該裝置的
-     localStorage，之後不用每次都輸入；換裝置、換瀏覽器要再輸入一次
-   - **不影響 Supabase**：anon key 本來就設計成前端公開，這道密碼只擋
-     「打會花錢的 AI/TTS API」，不會阻止有心人直接拿 anon key 打 Supabase
-   - 完全不設就是原本的行為——任何人拿到網址都能直接用，這是預設狀態
-   - 想換密碼：重新 `wrangler secret put ACCESS_PASSPHRASE` 蓋掉舊的，
-     所有裝置下次呼叫 AI 功能時會自動被登出、跳回輸入畫面
-
-> 台語語音每合成一句就花一次點數，所以 Worker 端用 Cloudflare Cache
-> 依「句子＋音色＋語速」快取，同一句重聽或別台裝置再聽都不會再收費。
+> 語音每合成一句就花一次額度，所以兩支 TTS 端點都用 Cloudflare Cache 快取。
+> 台語依「句子＋音色＋語速」，Google 依「句子＋音色」——Google 一律用 1.0 倍速
+> 合成、語速交給前端 `playbackRate`，所以 5 檔語速共用同一份音檔。
+> 同一句重聽或別台裝置再聽都不會再收費。
 
 ## 3. GitHub Pages（前端）
 
@@ -107,7 +105,7 @@ npm run dev            # http://localhost:5173
 
 # Worker（另開終端機）
 cd worker
-printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nYATING_API_KEY=你的雅婷key\nACCESS_PASSPHRASE=test1234\n' > .dev.vars
+printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nGOOGLE_TTS_API_KEY=你的google key\nYATING_API_KEY=你的雅婷key\n' > .dev.vars
 npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin）
 ```
 
@@ -116,14 +114,14 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 - [ ] 首頁能看到成員A/成員B 卡片（Supabase 連線 OK）
 - [ ] 點成員 → 生成任務成功（Worker + Claude API OK）
 - [ ] 聽力頁能發音（TTS OK）
+- [ ] 聽力頁「🗣️ 換發音」看得到「☁️ 雲端語音」那一區，試聽起來像真人（Google TTS OK）
+- [ ] 口說對話頁 AI 回話用的也是雲端語音
 - [ ] 口說頁按住能辨識（STT OK；不支援的瀏覽器顯示鍵盤輸入）
 - [ ] 寫作提交能拿到批改結果，錯誤出現在「錯誤庫」
 - [ ] 完成任務回到首頁，隔天可再生成新任務
 - [ ] 台語首頁「試聽」有聲音（雅婷 TTS OK）
 - [ ] 台語生成腳本成功、逐句能播、跟讀能錄音並拿到分數
 - [ ] 手機可「加入主畫面」，開啟後為全螢幕 App 樣式
-- [ ] （若設了 `ACCESS_PASSPHRASE`）開站會先跳出密碼畫面，輸對才進得去；
-      輸錯會顯示「通關密碼不對」；輸對後重新整理不會再問第二次
 
 ## 常見問題
 
@@ -134,8 +132,7 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 | 生成任務 401 | `ANTHROPIC_API_KEY` secret 沒設或失效，重新 `wrangler secret put` |
 | 429 請稍後再試 | Worker 限流（同 IP 每分鐘 20 次），等一分鐘 |
 | 手機沒聲音 | iOS 需先點過頁面任一按鈕才能播放；音量/靜音鍵確認 |
+| 聲音很機械、發音設定看不到「雲端語音」 | `GOOGLE_TTS_API_KEY` 沒設、Text-to-Speech API 沒啟用、或專案沒開帳單。打開 Worker 的 `/health` 確認 `google_tts_key`，再用 `worker/README.md` 的 curl 測 `/api/gtts` 看實際錯誤 |
 | 台語沒聲音、顯示「語音服務暫時無法使用」 | `YATING_API_KEY` 沒設或點數用完，打開 Worker 的 `/health` 確認 |
 | 台語腳本存不進去（column does not exist） | `migration-008.sql` 沒跑 |
 | 台語跟讀按了沒反應 | 瀏覽器擋掉麥克風權限；Chrome 需在 https 或 localhost 下才給錄音 |
-| 開站一直卡在密碼畫面，密碼明明是對的 | 檢查 `wrangler secret put ACCESS_PASSPHRASE` 有沒有打錯字或多打了空白；改完密碼要 `wrangler deploy` 才生效 |
-| 用到一半突然又跳回密碼畫面 | 密碼被在別的裝置改掉了，重新輸入新密碼即可，不是壞掉 |

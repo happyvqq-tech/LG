@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
-import AccessGate from './components/AccessGate'
 import { ProfileProvider } from './lib/profileContext'
 import './index.css'
 
@@ -26,12 +25,10 @@ registerSW({
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <AccessGate>
-      <HashRouter>
-        <ProfileProvider>
-          <App />
-        </ProfileProvider>
-      </HashRouter>
-    </AccessGate>
+    <HashRouter>
+      <ProfileProvider>
+        <App />
+      </ProfileProvider>
+    </HashRouter>
   </React.StrictMode>,
 )
