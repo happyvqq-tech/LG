@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveTask } from '../lib/useActiveTask'
-import { speak, splitSentences, stopSpeaking, sttSupported, ttsSupported, HoldToTalkRecognizer } from '../lib/speech'
+import { speakMeasured, splitSentences, stopSpeaking, sttSupported, ttsSupported, HoldToTalkRecognizer } from '../lib/speech'
 import { computeShadowScore, SHADOW_PASS_THRESHOLD, type ShadowScoreResult } from '../lib/prosodyScore'
 import { logActivity } from '../lib/streakService'
 import { ensureListeningTranslation } from '../lib/translationService'
@@ -82,10 +82,11 @@ export default function Shadowing() {
     stopSpeaking()
     setErrorMsg('')
     setPhase('ai-reading')
-    const t0 = performance.now()
     try {
-      await speak(sentence, lang, rate)
-      aiDurationRef.current = performance.now() - t0
+      // 用 speakMeasured 而不是自己量 performance.now()：走雲端語音時
+      // 抓檔時間會被算進去，節奏分數就變成在量網路速度（見 speech.ts）
+      const spokenMs = await speakMeasured(sentence, lang, rate)
+      if (spokenMs > 0) aiDurationRef.current = spokenMs
       setHasHeardDemo(true)
     } catch (e: unknown) {
       setErrorMsg((e as Error).message)

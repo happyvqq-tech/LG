@@ -11,6 +11,15 @@ import type { Language } from './types'
 
 const KEY_PREFIX = 'lgl.voice'
 
+/**
+ * Google 語音的偏好值前綴。
+ *
+ * 裝置語音存的是 voiceURI、Google 語音存的是音色全名（en-US-Chirp3-HD-Aoede），
+ * 兩者格式撞不到但語意完全不同，加前綴才能明確區分「這個人選的是雲端語音
+ * 還是這台機器上的語音」，而不是靠猜字串長相。
+ */
+const GOOGLE_PREFIX = 'google:'
+
 function keyFor(language: Language): string {
   return `${KEY_PREFIX}.${language}`
 }
@@ -40,4 +49,23 @@ export function clearVoicePref(language: Language): void {
   } catch {
     // 同上
   }
+}
+
+/** 使用者挑的是哪一種語音；沒設定過回 null，代表交給自動挑選 */
+export type VoiceChoice =
+  | { kind: 'google'; name: string }
+  | { kind: 'device'; voiceURI: string }
+
+export function loadVoiceChoice(language: Language): VoiceChoice | null {
+  const raw = loadVoicePref(language)
+  if (!raw) return null
+  if (raw.startsWith(GOOGLE_PREFIX)) {
+    const name = raw.slice(GOOGLE_PREFIX.length)
+    return name ? { kind: 'google', name } : null
+  }
+  return { kind: 'device', voiceURI: raw }
+}
+
+export function saveGoogleVoicePref(language: Language, voiceName: string): void {
+  saveVoicePref(language, `${GOOGLE_PREFIX}${voiceName}`)
 }
