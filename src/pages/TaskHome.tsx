@@ -87,6 +87,20 @@ export default function TaskHome() {
         .limit(3)
       if (errError) throw new Error(errError.message)
 
+      // 2-1. 還在 active 的錯誤 ≤ 3 筆，本次任務要刻意製造用得到該句型的情境。
+      // 沒有製造機會就不算「沒再犯」（見 lib/errorRules.ts 的說明）。
+      // 取最舊的：等最久的先被考，錯誤才會輪替而不是永遠卡在同幾個。
+      const { data: expData, error: expError } = await supabase
+        .from('errors')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .eq('language', language)
+        .eq('status', 'active')
+        .order('created_at', { ascending: true })
+        .limit(3)
+      if (expError) throw new Error(expError.message)
+      const exposureErrors = (expData ?? []) as ErrorRecord[]
+
       // 3. 情境隨機取自成員情境池
       const scenario = pickRandom(profile.scenario_pool.length > 0 ? profile.scenario_pool : ['日常'], 1)[0]
 
@@ -99,6 +113,7 @@ export default function TaskHome() {
         scenario,
         grammarPoints,
         pendingErrors: (errData ?? []) as ErrorRecord[],
+        exposureErrors,
         vocabWords,
       })
       const taskJson = await callClaudeJSON<TaskJson>(
@@ -107,6 +122,8 @@ export default function TaskHome() {
       )
       // 記下本任務埋設驗證的錯誤，完成任務時據此推進狀態機
       taskJson.verify_error_ids = ((errData ?? []) as ErrorRecord[]).map((e) => e.id)
+      // 同理記下製造了使用機會的 active 錯誤——只有這些才有資格因為「這次沒犯」而加分
+      taskJson.exposure_error_ids = exposureErrors.map((e) => e.id)
 
       const saved = await createTask(profile.id, language as Language, taskJson)
       setTask(saved)

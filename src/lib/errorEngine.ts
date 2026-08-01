@@ -65,6 +65,9 @@ export async function processTaskCompletion(task: Task): Promise<void> {
     currentErrors,
     new Set(task.task_json.inserted_error_ids ?? []),
     new Set(task.task_json.verify_error_ids ?? []),
+    // 這個欄位是後來才加的，本次改動之前生成的任務不會有——傳空集合，
+    // 那些 active 錯誤就停在原地等下一個有製造機會的任務，不會被錯誤地推進
+    new Set(task.task_json.exposure_error_ids ?? []),
   )
   for (const u of updates) {
     const { error } = await supabase.from('errors').update(u.patch).eq('id', u.id)
