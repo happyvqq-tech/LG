@@ -11,6 +11,9 @@ import { useProfile } from '../lib/profileContext'
 import { getTaskById } from '../lib/taskService'
 import { speak, speakSequence, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
 import { ensureListeningTranslation } from '../lib/translationService'
+import { ensureReadingAid } from '../lib/readingAidService'
+import { READING_AID_LABEL, readingAidSupported } from '../lib/prompts/readingAid'
+import ReadingAidText, { replacesOriginal } from '../components/ReadingAidText'
 import { useSpeechRate } from '../lib/useSpeechRate'
 import SpeedPicker from '../components/SpeedPicker'
 import VoicePicker from '../components/VoicePicker'
@@ -70,6 +73,9 @@ export default function TaskReview() {
   const [showZh, setShowZh] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState('')
+  const [showAid, setShowAid] = useState(false)
+  const [aiding, setAiding] = useState(false)
+  const [aidError, setAidError] = useState('')
   const sessionRef = useRef(0)
 
   useEffect(() => {
@@ -108,6 +114,9 @@ export default function TaskReview() {
   )
   const lang = task?.language ?? '英文'
   const translations = task?.task_json.listening_translation ?? null
+  const aids = task?.task_json.listening_reading_aid ?? null
+  /** 英文沒有讀音輔助（見 prompts/readingAid.ts 的說明），按鈕就不該出現 */
+  const aidLang = readingAidSupported(lang) ? lang : null
 
   function stop() {
     sessionRef.current++
@@ -157,6 +166,27 @@ export default function TaskReview() {
       // 單句試聽失敗不必打斷複習
     } finally {
       if (sessionRef.current === session) setPlayingIndex(null)
+    }
+  }
+
+  async function toggleShowAid() {
+    if (showAid) {
+      setShowAid(false)
+      return
+    }
+    setShowAid(true)
+    // 日文的假名要標在漢字上，所以打開讀音就得同時看得到原文
+    if (!showText) setShowText(true)
+    if (!task || aids) return
+    setAiding(true)
+    setAidError('')
+    try {
+      const result = await ensureReadingAid(task)
+      setTask(result.task)
+    } catch (e: unknown) {
+      setAidError(`讀音標註失敗：${String((e as Error).message)}`)
+    } finally {
+      setAiding(false)
     }
   }
 
@@ -284,10 +314,22 @@ export default function TaskReview() {
             >
               {showZh ? '隱藏中文' : '顯示中文'}
             </button>
+            {aidLang && (
+              <button
+                onClick={() => void toggleShowAid()}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  showAid ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {showAid ? READING_AID_LABEL[aidLang].hide : READING_AID_LABEL[aidLang].show}
+              </button>
+            )}
           </div>
 
           {translating && <p className="mt-2 text-sm text-slate-400">翻譯中…</p>}
           {translateError && <p className="mt-2 text-sm text-red-600">{translateError}</p>}
+          {aiding && <p className="mt-2 text-sm text-slate-400">標註讀音中…</p>}
+          {aidError && <p className="mt-2 text-sm text-red-600">{aidError}</p>}
 
           <div className="mt-3 grid gap-1.5">
             {sentences.map((s, i) => (
@@ -306,9 +348,26 @@ export default function TaskReview() {
                 </button>
                 <div className="min-w-0 flex-1">
                   {showText ? (
-                    <p className="break-words leading-relaxed">{s}</p>
+                    showAid && aidLang && aids?.[i] && replacesOriginal(aidLang) ? (
+                      // 日文：假名標在漢字上，等於連原句一起呈現
+                      <ReadingAidText
+                        language={aidLang}
+                        aid={aids[i]}
+                        className="break-words leading-loose"
+                      />
+                    ) : (
+                      <p className="break-words leading-relaxed">{s}</p>
+                    )
                   ) : (
                     <p className="text-sm text-slate-400">第 {i + 1} 句（原文已隱藏）</p>
+                  )}
+                  {/* 韓文：實際發音要跟原句上下對照才看得出音變在哪 */}
+                  {showAid && aidLang && aids?.[i] && !replacesOriginal(aidLang) && (
+                    <ReadingAidText
+                      language={aidLang}
+                      aid={aids[i]}
+                      className="mt-1 break-words leading-relaxed text-amber-900"
+                    />
                   )}
                   {showZh && translations?.[i] && (
                     <p className="mt-1 text-sm text-teal-700">{translations[i]}</p>
