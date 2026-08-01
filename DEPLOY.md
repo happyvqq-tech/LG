@@ -19,6 +19,9 @@
    - 貼上 `supabase/migration-008.sql` 全文 → Run（台語腳本欄位 notes / level / topic；沒跑的話台語腳本存不進去）
    - 貼上 `supabase/migration-009.sql` 全文 → Run（泛聽教材 extensive_listens 表；沒跑的話泛聽頁會提示你來跑）
      ⚠️ 已建過資料庫的人這幾段也要跑，否則會出現「column / table does not exist」
+   - **`supabase/migration-010.sql` 先不要跑**——它會把資料庫從「任何人都能存取」
+     改成「要帶通關密碼才行」，必須在第 2 節設好 `ACCESS_PASSPHRASE` 並在網站上
+     輸入過一次密碼之後才跑。順序做錯會把自己鎖在外面（該檔開頭有完整說明與還原方式）
 
 > 古文原文（《古文觀止》222 篇）不進資料庫，隨程式動態載入，第一次進古文頁才下載約 190KB，
 > 之後由 Service Worker 快取，離線可讀。
@@ -68,6 +71,25 @@
    - 沒設也不會壞：前端連續失敗三次後就整個 session 改用瀏覽器內建語音
    - 設好之後打開 `https://<你的worker網址>/health` 應該看到
      `"google_tts_key": "已設定（xx 字元）"`
+8. 通關密碼（防網址外流被盜用 API 額度）：
+
+   ```bash
+   npx wrangler secret put ACCESS_PASSPHRASE   # 自訂一組全家共用的密碼
+   ```
+
+   - 這**不是帳號系統**，全家共用同一組密碼，只是擋在 `/api/chat`、`/api/tts`
+     前面，避免陌生人拿到網址後亂用把 Anthropic／雅婷的額度燒光
+   - 設定後前端第一次開站會跳出輸入畫面，輸對一次後存在該裝置的
+     localStorage，之後不用每次都輸入；換裝置、換瀏覽器要再輸入一次
+   - 完全不設就是原本的行為——任何人拿到網址都能直接用，這是預設狀態
+   - 想換密碼：重新 `wrangler secret put ACCESS_PASSPHRASE` 蓋掉舊的，
+     所有裝置下次呼叫 AI 功能時會自動被登出、跳回輸入畫面
+     （若已跑過 `migration-010`，資料庫那組也要同步改，見該檔的「換密碼」段）
+9. **設好密碼後**，回到第 1 節跑 `supabase/migration-010.sql`：
+   - 這一步把資料庫也擋起來。在此之前，任何人只要從前端 JS 撈出 anon key，
+     就能直接讀寫甚至刪光全家的學習資料——CORS 和通關密碼都擋不住那條路
+   - 密碼要跟第 8 點設的**完全一樣**
+   - 順序很重要：先部署前端 → 設 Worker secret → 在網站輸入過一次密碼 → 才跑 SQL
 
 > 語音每合成一句就花一次額度，所以兩支 TTS 端點都用 Cloudflare Cache 快取。
 > 台語依「句子＋音色＋語速」，Google 依「句子＋音色」——Google 一律用 1.0 倍速
@@ -108,7 +130,7 @@ npm run dev            # http://localhost:5173
 
 # Worker（另開終端機）
 cd worker
-printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nGOOGLE_TTS_API_KEY=你的google key\nYATING_API_KEY=你的雅婷key\n' > .dev.vars
+printf 'ANTHROPIC_API_KEY=sk-ant-你的key\nGOOGLE_TTS_API_KEY=你的google key\nYATING_API_KEY=你的雅婷key\nACCESS_PASSPHRASE=test1234\n' > .dev.vars
 npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin）
 ```
 
@@ -125,6 +147,8 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 - [ ] 台語首頁「試聽」有聲音（雅婷 TTS OK）
 - [ ] 台語生成腳本成功、逐句能播、跟讀能錄音並拿到分數
 - [ ] 手機可「加入主畫面」，開啟後為全螢幕 App 樣式
+- [ ] （若設了 `ACCESS_PASSPHRASE`）開站會先跳出密碼畫面，輸對才進得去；
+      輸錯會顯示「通關密碼不對」；輸對後重新整理不會再問第二次
 
 ## 常見問題
 
@@ -139,4 +163,7 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 | 台語沒聲音、顯示「語音服務暫時無法使用」 | `YATING_API_KEY` 沒設或點數用完，打開 Worker 的 `/health` 確認 |
 | 台語腳本存不進去（column does not exist） | `migration-008.sql` 沒跑 |
 | 泛聽頁顯示「泛聽資料表還沒建立」 | `migration-009.sql` 沒跑 |
+| 跑完 `migration-010` 後首頁一個成員都看不到 | 資料庫的密碼跟你輸入的不一致，或還沒在網站輸入過密碼。先確認 `app_secrets` 裡的值與 `ACCESS_PASSPHRASE` 相同；真的進不去用 `migration-010.sql` 最後面的「緊急還原」 |
 | 台語跟讀按了沒反應 | 瀏覽器擋掉麥克風權限；Chrome 需在 https 或 localhost 下才給錄音 |
+| 開站一直卡在密碼畫面，密碼明明是對的 | 檢查 `wrangler secret put ACCESS_PASSPHRASE` 有沒有打錯字或多打了空白；改完密碼要 `wrangler deploy` 才生效 |
+| 用到一半突然又跳回密碼畫面 | 密碼被在別的裝置改掉了，重新輸入新密碼即可，不是壞掉 |

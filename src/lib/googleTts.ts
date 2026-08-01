@@ -15,6 +15,7 @@
 // 沒有金鑰、沒有網路、額度用完的情況下 App 都還是能用，只是聲音沒那麼自然。
 
 import { GOOGLE_TTS_ENABLED } from './features'
+import { clearAccessPassphrase, loadAccessPassphrase } from './accessGate'
 import {
   GOOGLE_LANG_QUERY,
   GOOGLE_PRIMARY_LOCALE,
@@ -34,6 +35,30 @@ export class GoogleTtsError extends Error {
 function workerBase(): string | null {
   const url = import.meta.env.VITE_WORKER_URL
   return url ? url.replace(/\/$/, '') : null
+}
+
+/** 要跟 worker/src/index.ts 的 ACCESS_HEADER、lib/claude.ts 三處保持一致 */
+const ACCESS_HEADER = 'x-lgl-access'
+
+function postHeaders(): Record<string, string> {
+  const passphrase = loadAccessPassphrase()
+  return {
+    'content-type': 'application/json',
+    ...(passphrase ? { [ACCESS_HEADER]: passphrase } : {}),
+  }
+}
+
+/**
+ * 密碼被家人在別的裝置改掉時的處理，語意跟 claude.ts 一致：
+ * 清掉本機存的密碼並重新整理，讓 AccessGate 重新掛載回到輸入畫面。
+ *
+ * 回傳 true 代表已經處理掉了（呼叫端不必再包裝成一般錯誤）。
+ */
+function handleAccessDenied(status: number, code: string): boolean {
+  if (status !== 401 || code !== 'access_denied') return false
+  clearAccessPassphrase()
+  window.location.reload()
+  return true
 }
 
 /**
@@ -141,17 +166,20 @@ async function fetchVoices(languageCode: string): Promise<GoogleVoice[]> {
 
   const res = await fetch(`${base}/api/gtts/voices`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: postHeaders(),
     body: JSON.stringify({ languageCode }),
   })
   if (!res.ok) {
     let detail = ''
+    let code = ''
     try {
       const j = (await res.json()) as { message?: string; error?: string }
       detail = j.message ?? j.error ?? ''
+      code = j.error ?? ''
     } catch {
       // 非 JSON 錯誤內容，只回報狀態碼
     }
+    handleAccessDenied(res.status, code)
     throw new GoogleTtsError(`語音清單 ${res.status}${detail ? '：' + detail : ''}`)
   }
   const data = (await res.json()) as { voices?: GoogleVoice[] }
@@ -238,7 +266,7 @@ async function fetchAudioUrl(text: string, voice: string): Promise<string> {
   try {
     res = await fetch(`${base}/api/gtts`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: postHeaders(),
       body: JSON.stringify({ text, voice }),
     })
   } catch {
@@ -247,12 +275,15 @@ async function fetchAudioUrl(text: string, voice: string): Promise<string> {
 
   if (!res.ok) {
     let detail = ''
+    let code = ''
     try {
       const j = (await res.json()) as { message?: string; error?: string }
       detail = j.message ?? j.error ?? ''
+      code = j.error ?? ''
     } catch {
       // 非 JSON 錯誤內容，只回報狀態碼
     }
+    handleAccessDenied(res.status, code)
     throw new GoogleTtsError(`TTS ${res.status}${detail ? '：' + detail : ''}`)
   }
 

@@ -10,6 +10,11 @@ export interface Env {
   YATING_API_KEY: string
   /** Google Cloud Text-to-Speech（英日韓的真人感語音，CLAUDE.md 第 10 節的例外） */
   GOOGLE_TTS_API_KEY: string
+  /**
+   * 全家共用的通關密碼，擋在會花錢的端點前面（不是帳號系統，只是防網址外流被盜用）。
+   * 沒設的話這道關卡整個不啟用，向下相容還沒設定過的部署。
+   */
+  ACCESS_PASSPHRASE?: string
 }
 
 interface ChatRequestBody {
@@ -69,7 +74,10 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 4
+const WORKER_VERSION = 5
+
+/** 前端夾帶通關密碼的 header 名稱 */
+const ACCESS_HEADER = 'x-lgl-access'
 
 // in-memory 限流：同一個 Worker isolate 內有效，自用規模足夠
 const rateBuckets = new Map<string, number[]>()
@@ -85,9 +93,26 @@ function corsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Headers': `content-type, ${ACCESS_HEADER}`,
     'Access-Control-Max-Age': '86400',
   }
+}
+
+/**
+ * 通關密碼檢查。ACCESS_PASSPHRASE 沒設就不擋（向下相容還沒設定過的部署，
+ * 就跟 YATING_API_KEY 沒設只影響台語模組一樣，這是選配功能不是必要條件）。
+ */
+function hasAccess(request: Request, env: Env): boolean {
+  if (!env.ACCESS_PASSPHRASE) return true
+  return request.headers.get(ACCESS_HEADER) === env.ACCESS_PASSPHRASE
+}
+
+function accessDeniedResponse(origin: string): Response {
+  return jsonResponse(
+    { error: 'access_denied', message: '通關密碼不對或已變更，請重新輸入' },
+    401,
+    origin,
+  )
 }
 
 function jsonResponse(body: unknown, status: number, origin: string): Response {
@@ -148,6 +173,8 @@ function base64ToBytes(b64: string): Uint8Array {
 
 /** 台語語音合成：代理雅婷 TTS，回傳 audio/mpeg 位元組（不是 base64 JSON） */
 async function handleTts(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+
   if (!env.YATING_API_KEY) {
     return jsonResponse(
       {
@@ -275,6 +302,7 @@ function googleKeyMissing(origin: string): Response {
  * 而且打錯一個字就是 400。清單快取一天，前端每次開發音設定不會真的打上游。
  */
 async function handleGoogleVoices(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
   if (!env.GOOGLE_TTS_API_KEY) return googleKeyMissing(origin)
 
   let body: { languageCode?: string }
@@ -343,6 +371,9 @@ async function handleGoogleVoices(request: Request, env: Env, origin: string): P
 
 /** 英日韓語音合成：代理 Google Cloud TTS，回傳 audio/mpeg 位元組 */
 async function handleGtts(request: Request, env: Env, origin: string): Promise<Response> {
+  // Google TTS 是這次改動之後才有的端點，原本那版通關密碼沒擋到它。
+  // 它一樣會花錢（超過免費額度後 $30/1M 字元），一樣要擋
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
   if (!env.GOOGLE_TTS_API_KEY) return googleKeyMissing(origin)
 
   let body: GttsRequestBody
@@ -464,6 +495,8 @@ export default {
             google_tts_key: env.GOOGLE_TTS_API_KEY
               ? `已設定（${env.GOOGLE_TTS_API_KEY.length} 字元）`
               : '（未設定，英日韓會使用瀏覽器內建語音）',
+            // 通關密碼是選配的，沒設就代表任何人拿到網址都能直接用
+            access_passphrase: env.ACCESS_PASSPHRASE ? '已設定（有通關密碼保護）' : '（未設定，任何人都能直接使用）',
           },
           null,
           2,
@@ -497,9 +530,19 @@ export default {
       return handleGoogleVoices(request, env, origin)
     }
 
+    // 前端在通關密碼輸入畫面用這支立即驗證對不對，不用等到真的送出一次
+    // 任務生成才發現密碼錯——那樣使用者體驗很差且會浪費一次 AI 額度判斷失敗原因
+    if (url.pathname === '/api/verify-access' && request.method === 'POST') {
+      return hasAccess(request, env)
+        ? jsonResponse({ ok: true }, 200, origin)
+        : accessDeniedResponse(origin)
+    }
+
     if (url.pathname !== '/api/chat' || request.method !== 'POST') {
       return jsonResponse({ error: 'not_found' }, 404, origin)
     }
+
+    if (!hasAccess(request, env)) return accessDeniedResponse(origin)
 
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
     if (isRateLimited(ip)) {
