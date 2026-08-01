@@ -16,10 +16,11 @@ function gitInfo(cmd: string, fallback: string): string {
 const APP_VERSION = gitInfo('git rev-parse --short HEAD', 'dev')
 const BUILD_DATE = gitInfo('git log -1 --format=%cI', new Date().toISOString())
 
-// GitHub Pages 部署於 https://<user>.github.io/lglearning/，
-// 因此 production build 的 base 必須是 repo 名稱；本地 dev 用 '/'
+// GitHub Pages 部署於 https://<user>.github.io/<repo>/，因此 production build 的
+// base 必須是 repo 名稱（本地 dev 用 '/'）。這個值跟 repo 名稱綁死：對不上的話
+// index.html 會去抓不存在的路徑，整頁空白，而 Actions 那邊照樣顯示部署成功。
 export default defineConfig(({ mode }) => ({
-  base: mode === 'production' ? '/lglearning/' : '/',
+  base: mode === 'production' ? '/LG/' : '/',
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
     __BUILD_DATE__: JSON.stringify(BUILD_DATE),
