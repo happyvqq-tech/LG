@@ -192,6 +192,33 @@ export default function VoicePicker({
     [deviceItems, accentFilter, genderFilter],
   )
 
+  /**
+   * 主畫面只放「最自然」那批（Chirp 3 HD／Chirp HD），其餘收進摺疊區。
+   *
+   * 為什麼要分：Google 一個語言就給幾十個音色，全部攤平會變成一長串，
+   * 而其中真正值得挑的只有頂級那幾個——其他等級留著是備案，不是選項。
+   *
+   * 兩個退路，確保主畫面永遠不會是空的：
+   *   1. 這個語言沒有頂級音色 → 主畫面放全部雲端語音
+   *   2. 連雲端語音都沒有（沒設金鑰等）→ 裝置語音就是唯一選擇，直接攤開
+   */
+  const hasTopTier = shownCloud.some((v) => isTopTier(v.tier))
+  const featuredCloud = hasTopTier ? shownCloud.filter((v) => isTopTier(v.tier)) : shownCloud
+  const restCloud = hasTopTier ? shownCloud.filter((v) => !isTopTier(v.tier)) : []
+  const cloudEmpty = shownCloud.length === 0
+  const featuredDevice = cloudEmpty ? shownDevice : []
+  const hiddenDevice = cloudEmpty ? [] : shownDevice
+  const hiddenCount = restCloud.length + hiddenDevice.length
+
+  const [showMore, setShowMore] = useState(false)
+  /** 使用中的音色被收在摺疊區裡的話自動展開，否則會找不到「使用中」在哪 */
+  const selectedIsHidden =
+    selectedId !== null &&
+    [...restCloud, ...hiddenDevice].some((v) => v.id === selectedId)
+  useEffect(() => {
+    if (selectedIsHidden) setShowMore(true)
+  }, [selectedIsHidden])
+
   async function preview(v: PickerVoice) {
     stopSpeaking()
     setPreviewing(v.id)
@@ -379,37 +406,87 @@ export default function VoicePicker({
               </p>
             )}
 
-            {shownCloud.length > 0 && (
+            {featuredCloud.length > 0 && (
               <>
                 <p className="mt-5 text-sm font-bold text-slate-700">☁️ 雲端語音</p>
                 <p className="mt-0.5 text-xs text-slate-400">
                   最接近真人的一批，每台手機聽到的都一樣。需要網路，第一次播放會慢一點點。
                 </p>
-                <div className="mt-2 grid gap-2">{shownCloud.map(renderCard)}</div>
+                <div className="mt-2 grid gap-2">{featuredCloud.map(renderCard)}</div>
               </>
             )}
 
-            {shownDevice.length > 0 && (
+            {featuredDevice.length > 0 && (
               <>
-                <p className="mt-6 text-sm font-bold text-slate-700">📱 這台裝置的語音</p>
+                <p className="mt-5 text-sm font-bold text-slate-700">📱 這台裝置的語音</p>
                 <p className="mt-0.5 text-xs text-slate-400">
                   不需要網路，但品質看這台裝置裝了哪些語音包，換一台可能就不一樣。
                 </p>
-                <div className="mt-2 grid gap-2">{shownDevice.map(renderCard)}</div>
+                <div className="mt-2 grid gap-2">{featuredDevice.map(renderCard)}</div>
+              </>
+            )}
+
+            {hiddenCount > 0 && (
+              <>
+                <button
+                  onClick={() => setShowMore(!showMore)}
+                  aria-expanded={showMore}
+                  className="mt-6 flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3.5 text-left"
+                >
+                  <span className="text-sm font-bold text-slate-600">
+                    其他語音（{hiddenCount}）
+                  </span>
+                  <span className="text-slate-400">{showMore ? '▲' : '▼'}</span>
+                </button>
+
+                {showMore && (
+                  <>
+                    {restCloud.length > 0 && (
+                      <>
+                        <p className="mt-4 text-sm font-bold text-slate-700">☁️ 其他雲端音色</p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          一樣是雲端合成，但自然度沒有上面那批好。
+                        </p>
+                        <div className="mt-2 grid gap-2">{restCloud.map(renderCard)}</div>
+                      </>
+                    )}
+
+                    {hiddenDevice.length > 0 && (
+                      <>
+                        <p className="mt-5 text-sm font-bold text-slate-700">📱 這台裝置的語音</p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          不需要網路，但品質看這台裝置裝了哪些語音包，換一台可能就不一樣。
+                        </p>
+                        <div className="mt-2 grid gap-2">{hiddenDevice.map(renderCard)}</div>
+                      </>
+                    )}
+
+                    {hint && (
+                      <div className="mt-4 rounded-2xl bg-sky-50 p-4 ring-1 ring-sky-100">
+                        <p className="font-semibold text-sky-800">
+                          想讓「這台裝置的語音」更自然？（{hint.platform}）
+                        </p>
+                        <p className="mt-1 text-sm leading-relaxed text-sky-700">{hint.steps}</p>
+                        <p className="mt-2 text-xs text-sky-600">
+                          裝好之後回到這頁重新整理，新的聲音就會出現在清單裡。
+                          {cloudPossible && '（雲端語音不受這個影響，本來就已經是最自然的。）'}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </>
         )}
 
-        {hint && (
+        {/* 完全沒有可用語音時，安裝指引是唯一有用的資訊，不能藏在摺疊區裡 */}
+        {!loading && allItems.length === 0 && hint && (
           <div className="mt-5 rounded-2xl bg-sky-50 p-4 ring-1 ring-sky-100">
-            <p className="font-semibold text-sky-800">
-              想讓「這台裝置的語音」更自然？（{hint.platform}）
-            </p>
+            <p className="font-semibold text-sky-800">怎麼裝語音？（{hint.platform}）</p>
             <p className="mt-1 text-sm leading-relaxed text-sky-700">{hint.steps}</p>
             <p className="mt-2 text-xs text-sky-600">
-              裝好之後回到這頁重新整理，新的聲音就會出現在上面的清單裡。
-              {cloudPossible && '（雲端語音不受這個影響，本來就已經是最自然的。）'}
+              裝好之後回到這頁重新整理，新的聲音就會出現在清單裡。
             </p>
           </div>
         )}
