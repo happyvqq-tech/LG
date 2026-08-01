@@ -51,6 +51,7 @@
 ├── src/
 │   ├── pages/              # MemberSelect / TaskHome / Listening / Reading /
 │   │                       # Speaking / Writing / Feedback / GrammarDrill / Taiwanese
+│   │                       # TaskArchive / TaskReview（教材庫：翻閱過去任務複習，唯讀）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）

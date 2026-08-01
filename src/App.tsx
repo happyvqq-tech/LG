@@ -3,6 +3,8 @@ import RequireProfile from './components/RequireProfile'
 import { TAIGI_ENABLED } from './lib/features'
 import MemberSelect from './pages/MemberSelect'
 import TaskHome from './pages/TaskHome'
+import TaskArchive from './pages/TaskArchive'
+import TaskReview from './pages/TaskReview'
 import Listening from './pages/Listening'
 import ListeningCloze from './pages/ListeningCloze'
 import Reading from './pages/Reading'
@@ -34,6 +36,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<MemberSelect />} />
       <Route path="/home" element={guarded(<TaskHome />)} />
+      <Route path="/archive" element={guarded(<TaskArchive />)} />
+      <Route path="/archive/:taskId" element={guarded(<TaskReview />)} />
       <Route path="/listening" element={guarded(<Listening />)} />
       <Route path="/listening-cloze" element={guarded(<ListeningCloze />)} />
       <Route path="/reading" element={guarded(<Reading />)} />
