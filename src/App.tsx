@@ -17,6 +17,7 @@ import Fluency from './pages/Fluency'
 import ExtensiveHome from './pages/ExtensiveHome'
 import ExtensivePlayer from './pages/ExtensivePlayer'
 import Writing from './pages/Writing'
+import Rewrite from './pages/Rewrite'
 import Feedback from './pages/Feedback'
 import VocabHome from './pages/VocabHome'
 import VocabSession from './pages/VocabSession'
@@ -54,6 +55,7 @@ export default function App() {
       <Route path="/extensive" element={guarded(<ExtensiveHome />)} />
       <Route path="/extensive/:id" element={guarded(<ExtensivePlayer />)} />
       <Route path="/writing" element={guarded(<Writing />)} />
+      <Route path="/rewrite" element={guarded(<Rewrite />)} />
       <Route path="/feedback" element={guarded(<Feedback />)} />
       <Route path="/vocab" element={guarded(<VocabHome />)} />
       <Route path="/vocab/session" element={guarded(<VocabSession />)} />

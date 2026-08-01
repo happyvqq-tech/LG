@@ -108,6 +108,9 @@ export interface TaskJson {
   discuss_transcript?: ChatMessage[]
   grading?: GraderResult
   writing_answer?: string
+  /** 看完批改後憑印象重寫的版本（見 pages/Rewrite.tsx）。
+   *  回饋不搭配修改，效果接近零——這一步就是那個「修改」 */
+  writing_rewrite?: string
   /** 生成任務時埋設驗證的 pending_verify 錯誤 id */
   verify_error_ids?: string[]
   /** 生成任務時刻意製造「用得到該句型」情境的 active 錯誤 id。

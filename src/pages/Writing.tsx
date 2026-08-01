@@ -192,12 +192,34 @@ export default function Writing() {
             ))}
           </div>
 
-          <button
-            onClick={() => navigate('/feedback')}
-            className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
-          >
-            完成寫作 → 任務總結
-          </button>
+          {/* 有錯誤時，重寫才是主要動線。看批改而不動手改，效果接近零——
+              但也不強制，家庭自用最大的風險是斷掉不是練太少（見 pages/Rewrite.tsx） */}
+          {grading.errors.length > 0 ? (
+            <>
+              <button
+                onClick={() => navigate('/rewrite')}
+                className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
+              >
+                ✍️ 重寫一次（把批改收起來）
+              </button>
+              <p className="mt-1.5 text-center text-xs text-slate-400">
+                只看不改，過幾天還是會犯同樣的錯。花一分鐘改一遍差很多
+              </p>
+              <button
+                onClick={() => navigate('/feedback')}
+                className="mt-3 w-full rounded-xl bg-slate-100 py-3 font-semibold text-slate-500"
+              >
+                跳過重寫，直接看總結
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => navigate('/feedback')}
+              className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white active:scale-95"
+            >
+              完成寫作 → 任務總結
+            </button>
+          )}
         </section>
       )}
 
