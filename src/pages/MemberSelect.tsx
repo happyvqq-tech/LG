@@ -8,6 +8,7 @@ import { downloadIcs } from '../lib/ics'
 import Avatar from '../components/Avatar'
 import LevelPicker from '../components/LevelPicker'
 import DailyPlanEditor from '../components/DailyPlanEditor'
+import DeleteMemberDialog from '../components/DeleteMemberDialog'
 import {
   ALL_SCENARIOS,
   LEVEL_INFO,
@@ -51,7 +52,7 @@ function planSummary(plan: DailyPlan | null): string | null {
 
 export default function MemberSelect() {
   const navigate = useNavigate()
-  const { selectProfile } = useProfile()
+  const { profile: selectedProfile, selectProfile, clearProfile } = useProfile()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -211,6 +212,14 @@ export default function MemberSelect() {
             setEditing(null)
             void fetchProfiles()
           }}
+          onDeleted={(deletedId) => {
+            // 剛剛被刪掉的正好是目前選著的成員時，把選取狀態一起清掉——
+            // 否則 localStorage 還留著一個資料庫裡已不存在的成員，
+            // 下次進練習頁會撈到空資料（clearProfile 也會清進行中任務 id）
+            if (selectedProfile?.id === deletedId) clearProfile()
+            setEditing(null)
+            void fetchProfiles()
+          }}
         />
       )}
 
@@ -233,12 +242,16 @@ function ProfileDrawer({
   profile,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   mode: 'edit' | 'create'
   profile?: Profile
   onClose: () => void
   onSaved: () => void
+  /** 只有編輯模式會用到；新增中的成員還不存在，沒有東西可刪 */
+  onDeleted?: (deletedId: string) => void
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [name, setName] = useState(profile?.name ?? '')
   const [languages, setLanguages] = useState<Language[]>(profile?.languages ?? ['英文'])
   const [level, setLevel] = useState<Level>(profile?.level ?? 'B1')
@@ -431,7 +444,33 @@ function ProfileDrawer({
             {saving ? '儲存中…' : '儲存'}
           </button>
         </div>
+
+        {/* 危險操作放在最底下、跟儲存隔開，不會跟平常的編輯動線混在一起 */}
+        {mode === 'edit' && profile && onDeleted && (
+          <div className="mt-8 border-t border-slate-100 pt-5">
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="w-full rounded-xl border border-red-200 py-3 font-semibold text-red-600 active:bg-red-50"
+            >
+              刪除這個成員
+            </button>
+            <p className="mt-1.5 text-center text-xs text-slate-400">
+              會連同任務、教材庫、錯誤庫、單字庫一起刪除，需要輸入確認碼
+            </p>
+          </div>
+        )}
       </div>
+
+      {confirmingDelete && profile && onDeleted && (
+        <DeleteMemberDialog
+          profile={profile}
+          onCancel={() => setConfirmingDelete(false)}
+          onDeleted={() => {
+            setConfirmingDelete(false)
+            onDeleted(profile.id)
+          }}
+        />
+      )}
     </div>
   )
 }
