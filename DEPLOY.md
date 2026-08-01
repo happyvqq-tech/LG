@@ -17,6 +17,7 @@
    - 貼上 `supabase/migration-006.sql` 全文 → Run（連續天數 activity_log、虛詞專練 particle_cards 表）
    - 貼上 `supabase/migration-007.sql` 全文 → Run（韓文文法點種子；沒跑的話韓文任務生成會失敗）
    - 貼上 `supabase/migration-008.sql` 全文 → Run（台語腳本欄位 notes / level / topic；沒跑的話台語腳本存不進去）
+   - 貼上 `supabase/migration-009.sql` 全文 → Run（泛聽教材 extensive_listens 表；沒跑的話泛聽頁會提示你來跑）
      ⚠️ 已建過資料庫的人這幾段也要跑，否則會出現「column / table does not exist」
 
 > 古文原文（《古文觀止》222 篇）不進資料庫，隨程式動態載入，第一次進古文頁才下載約 190KB，
@@ -137,4 +138,5 @@ npx wrangler dev       # http://localhost:8787（自動允許 localhost Origin�
 | 聲音很機械、發音設定看不到「雲端語音」 | `GOOGLE_TTS_API_KEY` 沒設、Text-to-Speech API 沒啟用、或專案沒開帳單。打開 Worker 的 `/health` 確認 `google_tts_key`，再用 `worker/README.md` 的 curl 測 `/api/gtts` 看實際錯誤 |
 | 台語沒聲音、顯示「語音服務暫時無法使用」 | `YATING_API_KEY` 沒設或點數用完，打開 Worker 的 `/health` 確認 |
 | 台語腳本存不進去（column does not exist） | `migration-008.sql` 沒跑 |
+| 泛聽頁顯示「泛聽資料表還沒建立」 | `migration-009.sql` 沒跑 |
 | 台語跟讀按了沒反應 | 瀏覽器擋掉麥克風權限；Chrome 需在 https 或 localhost 下才給錄音 |

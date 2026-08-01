@@ -274,6 +274,20 @@ export interface ActivityLogRow {
   activity_date: string
 }
 
+/** 泛聽教材（對應 extensive_listens 表，migration-009）
+ *  刻意不放在 tasks：沒有語塊、沒有寫作題、沒有批改，是不同種類的東西 */
+export interface ExtensiveListen {
+  id: string
+  profile_id: string
+  language: Language
+  title: string
+  script: string
+  topic: string | null
+  /** 生成時使用的程度，比成員的學習程度低一級 */
+  level: string | null
+  created_at: string
+}
+
 export interface TaiwaneseScriptLine {
   hanji: string
   tailo: string

@@ -53,6 +53,8 @@
 │   │                       # Speaking / Writing / Feedback / GrammarDrill / Taiwanese
 │   │                       # TaskArchive / TaskReview（教材庫：翻閱過去任務複習，唯讀）
 │   │                       # BackTranslate（回譯：看中文產出目標語，再跟原句比對）
+│   │                       # Fluency（流利度 4/3/2：同段話講三次，時間遞減）
+│   │                       # ExtensiveHome / ExtensivePlayer（泛聽：長而簡單，只聽不練）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
@@ -182,6 +184,7 @@
 - `errors`：id, profile_id, language, original, corrected, error_type, rule_note, status(active/pending_verify/resolved), verify_count, created_at
 - `grammar_points`：id, language, name, level, description, in_rotation(bool)
 - `taiwanese_scripts`：id, title, lines(jsonb: 台文漢字/台羅/華語對照), notes(jsonb), level, topic, audio_urls(jsonb), created_at
+- `extensive_listens`：id, profile_id, language, title, script, topic, level, created_at（泛聽教材，migration-009）
 
 錯誤狀態機：`active`（新錯誤）→ 連續 2 次「**有機會犯卻沒犯**」→ `pending_verify`（任務生成器刻意埋設情境）→ 驗證通過 → `resolved`。
 
