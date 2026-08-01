@@ -1,0 +1,86 @@
+Copyright (c) 2026 happyvqq-tech. All rights reserved.
+著作權所有 (c) 2026 happyvqq-tech，保留一切權利。
+
+--------------------------------------------------------------------------
+繁體中文
+--------------------------------------------------------------------------
+
+這個 repository 是公開的，但**不是開源軟體**。
+
+「公開」與「開放授權」是兩件事。原始碼公開只代表任何人都看得到，
+不代表任何人都能使用。在沒有明示授權的情況下，著作權法的預設就是
+「保留一切權利」——本檔案只是把這個預設狀態寫清楚，以免有人誤會。
+
+未經著作權人事前書面同意，任何人不得對本專案之原始碼與原創內容為下列行為：
+
+  1. 重製、散布、公開傳輸
+  2. 修改、改作、製作衍生著作
+  3. 用於商業或非商業之公開服務
+  4. 移除或變更本著作權聲明
+
+允許的行為：
+
+  - 閱讀原始碼、作為個人學習與研究之參考
+  - 依 GitHub 服務條款所生之瀏覽與 fork（fork 本身不構成使用授權）
+
+### 適用範圍
+
+本聲明適用於本專案的原始碼、prompt 設計、學習流程設計與其他原創內容。
+
+**不適用於**下列兩類：
+
+  - **第三方套件**：React、Vite、Tailwind CSS、Supabase 客戶端等相依套件，
+    各自適用其原本的授權條款（多為 MIT），不受本聲明影響。
+  - **公有領域文本**：`src/data/` 中收錄的《古文觀止》等古典文獻原文屬於
+    公有領域，本專案不對這些文本本身主張任何權利。針對這些文本所做的
+    編排、註解、索引與教學設計則屬本專案的原創內容。
+
+### 其他
+
+本專案為家庭自用工具，不對外提供服務、不販售、不承接客製。
+軟體按「現狀」提供，不附任何明示或默示之擔保；作者不對任何使用本軟體
+所生之損害負責。
+
+--------------------------------------------------------------------------
+English
+--------------------------------------------------------------------------
+
+This repository is public, but it is NOT open source.
+
+Being publicly visible is not the same as being openly licensed. Without an
+explicit grant, copyright law reserves all rights to the author by default.
+This file simply makes that default explicit so there is no misunderstanding.
+
+No permission is granted to any person to copy, distribute, publicly
+transmit, modify, create derivative works from, or deploy this project's
+source code or original content, for commercial or non-commercial purposes,
+without the prior written consent of the copyright holder.
+
+Permitted:
+
+  - Reading the source code for personal study and reference
+  - Viewing and forking as provided by the GitHub Terms of Service
+    (forking does not by itself grant a license to use)
+
+### Scope
+
+This notice covers the source code, prompt design, learning-flow design, and
+other original content of this project.
+
+It does NOT cover:
+
+  - **Third-party dependencies** (React, Vite, Tailwind CSS, the Supabase
+    client, and others), which remain under their own licenses (mostly MIT).
+  - **Public-domain texts**: the classical Chinese works (e.g. Guwen Guanzhi)
+    included under `src/data/` are in the public domain, and no rights are
+    claimed over those texts themselves. The arrangement, annotations,
+    indexing, and pedagogical design applied to them are original work of
+    this project.
+
+### Disclaimer
+
+This is a private tool built for one family's own use. It is not offered as a
+service and is not for sale. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT
+WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
