@@ -61,6 +61,8 @@
 │   │   ├── googleTts.ts    # Google Cloud TTS 播放層（快取、預抓、失敗退回）
 │   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
 │   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
+│   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
+│   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
 │   │   └── prompts/        # 4 個 prompt 模組（見第 6 節，內容以本檔為準）
 │   └── data/
 │       └── grammar_points.ts  # 高中核心文法點種子清單

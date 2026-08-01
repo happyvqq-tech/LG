@@ -99,6 +99,9 @@ export interface TaskJson {
   /** 聽力稿逐句中文翻譯，跟 splitSentences(listening_script) 的順序一一對應；
    *  使用者第一次按「顯示中文」才會呼叫 AI 翻譯並存在這裡，之後重複使用 */
   listening_translation?: string[]
+  /** 聽力稿逐句讀音輔助（日文＝含 [漢字|かな] 標記的句子；韓文＝套用音變後的實際發音）。
+   *  同樣是按需生成後快取，只有日文與韓文會有，見 lib/readingAidService.ts */
+  listening_reading_aid?: string[]
   /** 情境角色對話的逐字稿 */
   speaking_transcript?: ChatMessage[]
   /** 討論文章重點的逐字稿（跟情境對話分開存，兩種練習可各做各的） */
