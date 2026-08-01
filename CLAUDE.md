@@ -24,7 +24,8 @@
 | 後端 | Cloudflare Workers（唯一職責：藏 API key、轉發 Claude API、簡單限流） |
 | 資料庫 | Supabase 免費版（PostgreSQL），前端用 anon key 直連 |
 | AI | Anthropic Claude API（模型見第 5 節） |
-| 語音 | 英日韓古文用瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT） |
+| 英日韓語音（TTS） | Google Cloud TTS（`texttospeech.googleapis.com`），經 Worker `/api/gtts` 代理，key 存 Worker secret；不可用時自動退回 speechSynthesis |
+| 古文語音・所有 STT | 瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT） |
 | 台語語音 | 雅婷 TTS（`tts.api.yating.tw`），經 Worker `/api/tts` 代理，key 存 Worker secret |
 
 ## 3. 架構
@@ -33,6 +34,7 @@
 瀏覽器 PWA (GitHub Pages)
    ├── Supabase JS client ──→ Supabase（profiles / tasks / errors / grammar_points）
    ├── fetch ──→ Cloudflare Worker /api/chat ──→ api.anthropic.com /v1/messages
+   ├── fetch ──→ Cloudflare Worker /api/gtts ──→ texttospeech.googleapis.com（英日韓語音，含快取）
    └── fetch ──→ Cloudflare Worker /api/tts  ──→ tts.api.yating.tw（台語語音，含快取）
                      （API key 存在 Worker 環境變數，絕不出現在前端程式碼）
 ```
@@ -48,12 +50,21 @@
 │   └── wrangler.toml
 ├── src/
 │   ├── pages/              # MemberSelect / TaskHome / Listening / Reading /
-│   │                       # Speaking / Writing / Feedback / GrammarDrill / Taiwanese
+│   │                       # Speaking / Writing / Rewrite / Feedback / GrammarDrill / Taiwanese
+│   │                       # TaskArchive / TaskReview（教材庫：翻閱過去任務複習，唯讀）
+│   │                       # BackTranslate（回譯：看中文產出目標語，再跟原句比對）
+│   │                       # Fluency（流利度 4/3/2：同段話講三次，時間遞減）
+│   │                       # ExtensiveHome / ExtensivePlayer（泛聽：長而簡單，只聽不練）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
 │   │   ├── supabase.ts
-│   │   ├── speech.ts       # TTS/STT 封裝（瀏覽器 API）
+│   │   ├── speech.ts       # TTS/STT 統一入口（自動在 Google 與瀏覽器語音之間選擇）
+│   │   ├── googleTts.ts    # Google Cloud TTS 播放層（快取、預抓、失敗退回）
+│   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
+│   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
+│   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
+│   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
 │   │   └── prompts/        # 4 個 prompt 模組（見第 6 節，內容以本檔為準）
 │   └── data/
 │       └── grammar_points.ts  # 高中核心文法點種子清單
@@ -94,7 +105,8 @@
 硬性要求：
 1. 聽力稿 150-250 字，口語自然，必須自然融入指定文法點至少 3 次
 2. 若有待驗證錯誤，必須在對話任務或寫作題中刻意設計會用到該句型的情境（不明說）
-3. 語塊（chunks）給 5-8 個，是可整段套用的片語，不是單字
+3. 語塊（chunks）給 5-8 個，是可整段套用的單位、不是單字。三個語言的「可套用單位」不同：
+   英文＝搭配詞與片語動詞；日文＝文型（〜わけにはいかない 這類）；韓文＝連結語尾與慣用句型
 4. 寫作題必須與情境直接相關，30-80 字即可完成
 5. 日文任務需標註丁寧體/普通體要求
 
@@ -172,8 +184,11 @@
 - `errors`：id, profile_id, language, original, corrected, error_type, rule_note, status(active/pending_verify/resolved), verify_count, created_at
 - `grammar_points`：id, language, name, level, description, in_rotation(bool)
 - `taiwanese_scripts`：id, title, lines(jsonb: 台文漢字/台羅/華語對照), notes(jsonb), level, topic, audio_urls(jsonb), created_at
+- `extensive_listens`：id, profile_id, language, title, script, topic, level, created_at（泛聽教材，migration-009）
 
-錯誤狀態機：`active`（新錯誤）→ 連續 2 次任務未再犯 → `pending_verify`（任務生成器刻意埋設情境）→ 驗證通過 → `resolved`。
+錯誤狀態機：`active`（新錯誤）→ 連續 2 次「**有機會犯卻沒犯**」→ `pending_verify`（任務生成器刻意埋設情境）→ 驗證通過 → `resolved`。
+
+「有機會犯」是關鍵限定：任務生成時會挑最舊的 3 筆 active 錯誤，要求生成器把情境設計成非用到該句型不可，並記在 `task_json.exposure_error_ids`。只有這些錯誤才會因為本次沒再犯而推進 `verify_count`。單純「這次沒犯」不算數——那很可能只是任務根本沒用到那個句型，據此推進會累積出假陽性的 `resolved`，學習者以為攻克了、系統也不再考他，錯誤就永久逃逸。
 
 ## 8. 程式規範
 
@@ -192,6 +207,7 @@
 |---|---|---|
 | Worker | `ANTHROPIC_API_KEY` | wrangler secret，絕不進 git |
 | Worker | `YATING_API_KEY` | wrangler secret，台語語音；沒設只影響台語 |
+| Worker | `GOOGLE_TTS_API_KEY` | wrangler secret，英日韓語音；沒設會自動退回瀏覽器內建語音，不會壞掉 |
 | Worker | `ALLOWED_ORIGIN` | GitHub Pages 網址，CORS 白名單 |
 | 前端 `.env` | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase 連線 |
 | 前端 `.env` | `VITE_WORKER_URL` | Worker 端點 |
@@ -201,7 +217,11 @@
 ## 10. 禁止事項
 
 - 不做登入/註冊/金流/多租戶
-- 不引入付費語音 API（台語雅婷除外——使用者已於 2026-07 明確同意，已實作但預設關閉）
+- 不引入付費語音 API，以下兩個是使用者明確同意的例外：
+  - 台語雅婷（2026-07 同意）——已實作但預設關閉
+  - 英日韓 Google Cloud TTS（2026-08 同意）——聽力與口說對話都用它，每月前 100 萬字元免費，
+    家庭用量約 12 萬；一律 1.0 倍速合成（語速交給前端 `playbackRate`）以維持快取命中率
+- 不引入付費語音「評測」API（Azure Pronunciation Assessment 等）——使用者於 2026-08 決定不做發音評分
 - 不在前端暴露任何 API key（Supabase anon key 除外，屬設計內公開）
 - 不擅自升級/更換主要框架與模型字串
 - 不生成與任務無關的大量教材塞進資料庫

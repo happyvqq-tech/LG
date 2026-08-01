@@ -43,6 +43,14 @@ export default function Speaking() {
       desc: `AI 扮演「${task.task_json.speaking_role_setup}」跟你對話，目標是${task.task_json.speaking_goal}`,
       doneLabel: speaking_transcript && speaking_transcript.length > 0 ? '進行中' : undefined,
     },
+    {
+      // 流利度是 Nation 四股裡唯一沒被其他關卡覆蓋的一股（見 lib/fluencyRounds.ts）。
+      // 放在最後：它的前提是內容已經練過了，先做這個等於在練還不會的東西
+      path: '/fluency',
+      icon: '⏱️',
+      title: '流利度訓練 4/3/2',
+      desc: '同一段話講三次，時間一次比一次短。不學新東西，只練把會的講快',
+    },
   ]
 
   return (

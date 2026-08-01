@@ -87,6 +87,20 @@ export default function TaskHome() {
         .limit(3)
       if (errError) throw new Error(errError.message)
 
+      // 2-1. 還在 active 的錯誤 ≤ 3 筆，本次任務要刻意製造用得到該句型的情境。
+      // 沒有製造機會就不算「沒再犯」（見 lib/errorRules.ts 的說明）。
+      // 取最舊的：等最久的先被考，錯誤才會輪替而不是永遠卡在同幾個。
+      const { data: expData, error: expError } = await supabase
+        .from('errors')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .eq('language', language)
+        .eq('status', 'active')
+        .order('created_at', { ascending: true })
+        .limit(3)
+      if (expError) throw new Error(expError.message)
+      const exposureErrors = (expData ?? []) as ErrorRecord[]
+
       // 3. 情境隨機取自成員情境池
       const scenario = pickRandom(profile.scenario_pool.length > 0 ? profile.scenario_pool : ['日常'], 1)[0]
 
@@ -99,6 +113,7 @@ export default function TaskHome() {
         scenario,
         grammarPoints,
         pendingErrors: (errData ?? []) as ErrorRecord[],
+        exposureErrors,
         vocabWords,
       })
       const taskJson = await callClaudeJSON<TaskJson>(
@@ -107,6 +122,8 @@ export default function TaskHome() {
       )
       // 記下本任務埋設驗證的錯誤，完成任務時據此推進狀態機
       taskJson.verify_error_ids = ((errData ?? []) as ErrorRecord[]).map((e) => e.id)
+      // 同理記下製造了使用機會的 active 錯誤——只有這些才有資格因為「這次沒犯」而加分
+      taskJson.exposure_error_ids = exposureErrors.map((e) => e.id)
 
       const saved = await createTask(profile.id, language as Language, taskJson)
       setTask(saved)
@@ -249,6 +266,42 @@ export default function TaskHome() {
       )}
 
       <section className="mt-6 grid gap-3">
+        {/* 教材庫：過去生成的任務一直都存在 tasks 表裡，只是以前沒有入口去看，
+            練完就再也翻不到了。有機會複習才對得起每天生成的內容。 */}
+        <Link
+          to="/archive"
+          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">🗄️</span>
+            <span className="text-left">
+              <span className="block font-bold">教材庫</span>
+              <span className="block text-sm text-slate-500">翻閱過去的任務・重聽、重讀、看批改</span>
+            </span>
+          </span>
+          <span className="text-slate-300">→</span>
+        </Link>
+
+        {/* 泛聽跟每日任務的精聽是兩件事：精聽建立準確度，泛聽建立自動化與語感。
+            每日任務一週只有約 1,500 字的輸入，靠那個量習得不了東西 */}
+        {hasTaskLanguage && (
+          <Link
+            to="/extensive"
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">🎧</span>
+              <span className="text-left">
+                <span className="block font-bold">泛聽</span>
+                <span className="block text-sm text-slate-500">
+                  長一點、簡單一點・聽個大概就好，沒有練習題
+                </span>
+              </span>
+            </span>
+            <span className="text-slate-300">→</span>
+          </Link>
+        )}
+
         <Link
           to="/vocab"
           className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"

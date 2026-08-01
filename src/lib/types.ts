@@ -99,14 +99,23 @@ export interface TaskJson {
   /** 聽力稿逐句中文翻譯，跟 splitSentences(listening_script) 的順序一一對應；
    *  使用者第一次按「顯示中文」才會呼叫 AI 翻譯並存在這裡，之後重複使用 */
   listening_translation?: string[]
+  /** 聽力稿逐句讀音輔助（日文＝含 [漢字|かな] 標記的句子；韓文＝套用音變後的實際發音）。
+   *  同樣是按需生成後快取，只有日文與韓文會有，見 lib/readingAidService.ts */
+  listening_reading_aid?: string[]
   /** 情境角色對話的逐字稿 */
   speaking_transcript?: ChatMessage[]
   /** 討論文章重點的逐字稿（跟情境對話分開存，兩種練習可各做各的） */
   discuss_transcript?: ChatMessage[]
   grading?: GraderResult
   writing_answer?: string
+  /** 看完批改後憑印象重寫的版本（見 pages/Rewrite.tsx）。
+   *  回饋不搭配修改，效果接近零——這一步就是那個「修改」 */
+  writing_rewrite?: string
   /** 生成任務時埋設驗證的 pending_verify 錯誤 id */
   verify_error_ids?: string[]
+  /** 生成任務時刻意製造「用得到該句型」情境的 active 錯誤 id。
+   *  只有這些錯誤才會因為本次沒再犯而推進 verify_count（見 lib/errorRules.ts） */
+  exposure_error_ids?: string[]
   /** 本任務批改後寫入 errors 表的新錯誤 id（重新批改時據此清除重寫） */
   inserted_error_ids?: string[]
 }
@@ -266,6 +275,20 @@ export interface ActivityLogRow {
   id: string
   profile_id: string
   activity_date: string
+}
+
+/** 泛聽教材（對應 extensive_listens 表，migration-009）
+ *  刻意不放在 tasks：沒有語塊、沒有寫作題、沒有批改，是不同種類的東西 */
+export interface ExtensiveListen {
+  id: string
+  profile_id: string
+  language: Language
+  title: string
+  script: string
+  topic: string | null
+  /** 生成時使用的程度，比成員的學習程度低一級 */
+  level: string | null
+  created_at: string
 }
 
 export interface TaiwaneseScriptLine {

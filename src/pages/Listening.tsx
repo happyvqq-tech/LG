@@ -4,6 +4,9 @@ import { useActiveTask } from '../lib/useActiveTask'
 import { speak, speakSequence, splitSentences, stopSpeaking, ttsSupported } from '../lib/speech'
 import { updateTaskJson } from '../lib/taskService'
 import { ensureListeningTranslation } from '../lib/translationService'
+import { ensureReadingAid } from '../lib/readingAidService'
+import { READING_AID_LABEL, readingAidSupported } from '../lib/prompts/readingAid'
+import ReadingAidText, { replacesOriginal } from '../components/ReadingAidText'
 import TaskNav from '../components/TaskNav'
 import SpeedPicker from '../components/SpeedPicker'
 import VoicePicker from '../components/VoicePicker'
@@ -28,6 +31,9 @@ export default function Listening() {
   const [showZh, setShowZh] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [translateError, setTranslateError] = useState('')
+  const [showAid, setShowAid] = useState(false)
+  const [aiding, setAiding] = useState(false)
+  const [aidError, setAidError] = useState('')
   const sessionRef = useRef(0)
   const persistedDoneRef = useRef(false)
   /**
@@ -39,6 +45,9 @@ export default function Listening() {
   const heardRef = useRef<Set<number>>(new Set())
 
   const translations = task?.task_json.listening_translation ?? null
+  const aids = task?.task_json.listening_reading_aid ?? null
+  /** 英文沒有讀音輔助（見 prompts/readingAid.ts 的說明），按鈕就不該出現 */
+  const aidLang = readingAidSupported(lang) ? lang : null
 
   // 離開頁面時停止播放
   useEffect(() => {
@@ -95,6 +104,27 @@ export default function Listening() {
       setErrorMsg((e as Error).message)
     } finally {
       if (sessionRef.current === session) setPlaying(false)
+    }
+  }
+
+  async function toggleShowAid() {
+    if (showAid) {
+      setShowAid(false)
+      return
+    }
+    setShowAid(true)
+    // 日文的假名要標在漢字上，所以打開讀音就得同時看得到原文
+    if (!showText) setShowText(true)
+    if (!task || aids) return
+    setAiding(true)
+    setAidError('')
+    try {
+      const result = await ensureReadingAid(task)
+      setTask(result.task)
+    } catch (e: unknown) {
+      setAidError(`讀音標註失敗：${String((e as Error).message)}`)
+    } finally {
+      setAiding(false)
     }
   }
 
@@ -159,9 +189,31 @@ export default function Listening() {
           第 {index + 1} / {sentences.length} 句
         </p>
 
-        {showText && (
-          <p className="mt-3 text-center text-lg font-semibold leading-relaxed">{sentences[index]}</p>
+        {showText &&
+          (showAid && aidLang && aids?.[index] && replacesOriginal(aidLang) ? (
+            // 日文：假名標在漢字上，等於連原句一起呈現，不必再印一次純文字
+            <ReadingAidText
+              language={aidLang}
+              aid={aids[index]}
+              className="mt-3 text-center text-lg font-semibold leading-loose"
+            />
+          ) : (
+            <p className="mt-3 text-center text-lg font-semibold leading-relaxed">
+              {sentences[index]}
+            </p>
+          ))}
+
+        {/* 韓文：實際發音是「同一句的另一種寫法」，要跟原句上下對照才看得出音變 */}
+        {showAid && aidLang && aids?.[index] && !replacesOriginal(aidLang) && (
+          <ReadingAidText
+            language={aidLang}
+            aid={aids[index]}
+            className="mt-2 text-center text-lg leading-relaxed text-amber-900"
+          />
         )}
+
+        {showAid && aiding && <p className="mt-2 text-sm text-slate-400">標註讀音中…</p>}
+        {aidError && <p className="mt-2 text-sm text-red-600">{aidError}</p>}
 
         {showZh && (
           <div className="mt-2 min-h-[1.5rem] text-center">
@@ -224,6 +276,16 @@ export default function Listening() {
           >
             {showZh ? '隱藏中文' : '顯示中文'}
           </button>
+          {aidLang && (
+            <button
+              onClick={() => void toggleShowAid()}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                showAid ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {showAid ? READING_AID_LABEL[aidLang].hide : READING_AID_LABEL[aidLang].show}
+            </button>
+          )}
         </div>
 
         <div className="mt-6 w-full border-t border-slate-100 pt-5 text-center">

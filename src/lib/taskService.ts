@@ -51,6 +51,41 @@ export async function completeTask(taskId: string): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/**
+ * 過去的教材（含今天的），新的在前。
+ *
+ * 不篩 status：未完成的任務一樣是生成好的教材，拿來複習聽力稿與語塊完全沒問題，
+ * 只是沒有批改結果可看。清單上會標示狀態，不要在這裡先幫使用者砍掉一半。
+ */
+export async function listPastTasks(
+  profileId: string,
+  language: Language | null,
+  limit = 100,
+): Promise<Task[]> {
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('profile_id', profileId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (language) query = query.eq('language', language)
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Task[]
+}
+
+/** 單一教材（複習頁用）。找不到或不屬於這個成員時回 null，由呼叫端導回去。 */
+export async function getTaskById(taskId: string, profileId: string): Promise<Task | null> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('profile_id', profileId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return (data as Task | null) ?? null
+}
+
 export function setActiveTaskId(id: string): void {
   localStorage.setItem(ACTIVE_KEY, id)
 }

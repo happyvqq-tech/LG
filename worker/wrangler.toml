@@ -15,6 +15,13 @@ ALLOWED_ORIGIN = "https://happyvqq-tech.github.io"
 # API key 不放這裡！用 secret（擇一）：
 #   wrangler secret put ANTHROPIC_API_KEY   # Claude API
 #   wrangler secret put YATING_API_KEY      # 雅婷 TTS（台語語音）
+#   wrangler secret put GOOGLE_TTS_API_KEY  # Google Cloud TTS（英日韓語音）
 #   或 Dashboard → Worker → Settings → Variables and secrets → 型別選 Secret
 #
 # YATING_API_KEY 沒設的話只有台語模組不能用，英日韓古文照常運作。
+#
+# GOOGLE_TTS_API_KEY 沒設也不會壞：前端連續失敗三次後就整個 session 改用瀏覽器
+# 內建語音，只是音質會依裝置而異。要拿這把金鑰：GCP Console 建專案 → 啟用
+# Cloud Text-to-Speech API → 憑證 → 建立 API 金鑰，並在金鑰設定裡限制成
+# 「只能呼叫 Cloud Text-to-Speech API」。每月前 100 萬字元免費，還是建議去
+# GCP 的帳單頁設一個預算警示。設好後開 /health 確認 google_tts_key 顯示已設定。

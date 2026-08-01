@@ -3,6 +3,9 @@ import RequireProfile from './components/RequireProfile'
 import { TAIGI_ENABLED } from './lib/features'
 import MemberSelect from './pages/MemberSelect'
 import TaskHome from './pages/TaskHome'
+import TaskArchive from './pages/TaskArchive'
+import TaskReview from './pages/TaskReview'
+import BackTranslate from './pages/BackTranslate'
 import Listening from './pages/Listening'
 import ListeningCloze from './pages/ListeningCloze'
 import Reading from './pages/Reading'
@@ -10,7 +13,11 @@ import Speaking from './pages/Speaking'
 import SpeakingDiscuss from './pages/SpeakingDiscuss'
 import SpeakingRoleplay from './pages/SpeakingRoleplay'
 import Shadowing from './pages/Shadowing'
+import Fluency from './pages/Fluency'
+import ExtensiveHome from './pages/ExtensiveHome'
+import ExtensivePlayer from './pages/ExtensivePlayer'
 import Writing from './pages/Writing'
+import Rewrite from './pages/Rewrite'
 import Feedback from './pages/Feedback'
 import VocabHome from './pages/VocabHome'
 import VocabSession from './pages/VocabSession'
@@ -34,6 +41,9 @@ export default function App() {
     <Routes>
       <Route path="/" element={<MemberSelect />} />
       <Route path="/home" element={guarded(<TaskHome />)} />
+      <Route path="/archive" element={guarded(<TaskArchive />)} />
+      <Route path="/archive/:taskId" element={guarded(<TaskReview />)} />
+      <Route path="/archive/:taskId/back-translate" element={guarded(<BackTranslate />)} />
       <Route path="/listening" element={guarded(<Listening />)} />
       <Route path="/listening-cloze" element={guarded(<ListeningCloze />)} />
       <Route path="/reading" element={guarded(<Reading />)} />
@@ -41,7 +51,11 @@ export default function App() {
       <Route path="/speaking/discuss" element={guarded(<SpeakingDiscuss />)} />
       <Route path="/speaking/roleplay" element={guarded(<SpeakingRoleplay />)} />
       <Route path="/shadowing" element={guarded(<Shadowing />)} />
+      <Route path="/fluency" element={guarded(<Fluency />)} />
+      <Route path="/extensive" element={guarded(<ExtensiveHome />)} />
+      <Route path="/extensive/:id" element={guarded(<ExtensivePlayer />)} />
       <Route path="/writing" element={guarded(<Writing />)} />
+      <Route path="/rewrite" element={guarded(<Rewrite />)} />
       <Route path="/feedback" element={guarded(<Feedback />)} />
       <Route path="/vocab" element={guarded(<VocabHome />)} />
       <Route path="/vocab/session" element={guarded(<VocabSession />)} />
