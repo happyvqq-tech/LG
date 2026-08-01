@@ -86,7 +86,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 6
+const WORKER_VERSION = 7
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -130,7 +130,7 @@ function accessDeniedResponse(origin: string): Response {
 function jsonResponse(body: unknown, status: number, origin: string): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', ...corsHeaders(origin) },
+    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
   })
 }
 
@@ -339,7 +339,7 @@ async function handleGoogleVoices(request: Request, env: Env, origin: string): P
   if (cached) {
     return new Response(cached.body, {
       status: 200,
-      headers: { 'content-type': 'application/json', 'x-gtts-cache': 'hit', ...corsHeaders(origin) },
+      headers: { 'content-type': 'application/json; charset=utf-8', 'x-gtts-cache': 'hit', ...corsHeaders(origin) },
     })
   }
 
@@ -372,12 +372,12 @@ async function handleGoogleVoices(request: Request, env: Env, origin: string): P
   await cache.put(
     cacheRequest,
     new Response(raw, {
-      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' },
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=86400' },
     }),
   )
   return new Response(raw, {
     status: 200,
-    headers: { 'content-type': 'application/json', 'x-gtts-cache': 'miss', ...corsHeaders(origin) },
+    headers: { 'content-type': 'application/json; charset=utf-8', 'x-gtts-cache': 'miss', ...corsHeaders(origin) },
   })
 }
 
@@ -434,7 +434,7 @@ async function handleGtts(request: Request, env: Env, origin: string): Promise<R
   try {
     upstream = await fetch(`${GOOGLE_TTS_URL}?key=${encodeURIComponent(env.GOOGLE_TTS_API_KEY)}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json; charset=utf-8' },
       body: JSON.stringify({
         input: { text },
         // 不送 speakingRate：一律 1.0 合成，語速交給前端 playbackRate（見 gttsCacheKeyFor）
@@ -513,14 +513,14 @@ export default {
           null,
           2,
         ),
-        { status: 200, headers: { 'content-type': 'application/json' } },
+        { status: 200, headers: { 'content-type': 'application/json; charset=utf-8' } },
       )
     }
 
     if (!origin || !isAllowedOrigin(origin, env)) {
       return new Response(JSON.stringify({ error: 'origin_not_allowed' }), {
         status: 403,
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json; charset=utf-8' },
       })
     }
 
@@ -646,7 +646,7 @@ export default {
 
     return new Response(text, {
       status: upstream.status,
-      headers: { 'content-type': 'application/json', ...corsHeaders(origin) },
+      headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
     })
   },
 }
