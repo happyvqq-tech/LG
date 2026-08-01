@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useProfile } from '../lib/profileContext'
 import { listPastTasks } from '../lib/taskService'
+import { loadReviewedToday, markReviewed, pickReviewTasks } from '../lib/reviewSchedule'
 import { isTaskLanguage, type Language, type Task } from '../lib/types'
 
 const ALL = '__all__'
@@ -65,6 +66,20 @@ export default function TaskArchive() {
     [tasks, langFilter],
   )
 
+  /**
+   * 今天該回去重聽的。跟著語言篩選走，不然選了「日文」還是會排出英文教材。
+   * now 固定在這次進頁面的時刻，避免每次 render 都產生新的 Date 讓 memo 失效。
+   */
+  const [now] = useState(() => new Date())
+  const [reviewed, setReviewed] = useState<Set<string>>(() => loadReviewedToday(new Date()))
+  const reviewPicks = useMemo(() => pickReviewTasks(shown, now), [shown, now])
+
+  function openReview(taskId: string) {
+    markReviewed(taskId, now)
+    setReviewed(loadReviewedToday(now))
+    navigate(`/archive/${taskId}`)
+  }
+
   if (!profile) return null
 
   return (
@@ -120,7 +135,56 @@ export default function TaskArchive() {
         </div>
       )}
 
-      <div className="mt-4 grid gap-3">
+      {reviewPicks.length > 0 && (
+        <section className="mt-6 rounded-3xl bg-teal-50/70 p-5 ring-1 ring-teal-100">
+          <h2 className="font-bold text-teal-800">🔁 今天回去聽這幾篇</h2>
+          <p className="mt-1 text-xs leading-relaxed text-teal-700">
+            隔一段時間再聽一次，記得的時間會拉長好幾倍。不用重做練習，聽過就好——
+            通勤、洗碗的時候放著也算。
+          </p>
+          <div className="mt-3 grid gap-2">
+            {reviewPicks.map((p) => {
+              const done = reviewed.has(p.task.id)
+              return (
+                <button
+                  key={p.task.id}
+                  onClick={() => openReview(p.task.id)}
+                  className={`flex items-center gap-3 rounded-2xl p-4 text-left transition active:scale-[0.98] ${
+                    done ? 'bg-white/60' : 'bg-white shadow-sm'
+                  }`}
+                >
+                  <span
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg ${
+                      done ? 'bg-green-100' : 'bg-teal-100'
+                    }`}
+                  >
+                    {done ? '✓' : '🎧'}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-teal-700">
+                      {p.label}・{p.task.language}
+                    </span>
+                    <span
+                      className={`mt-0.5 block break-words font-semibold ${
+                        done ? 'text-slate-400' : ''
+                      }`}
+                    >
+                      {p.task.task_json.scenario_title}
+                    </span>
+                  </span>
+                  <span className="text-slate-300">→</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {shown.length > 0 && (
+        <h2 className="mt-6 text-sm font-bold text-slate-500">全部教材（{shown.length}）</h2>
+      )}
+
+      <div className="mt-2 grid gap-3">
         {shown.map((t) => (
           <Link
             key={t.id}

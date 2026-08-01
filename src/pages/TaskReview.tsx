@@ -235,6 +235,29 @@ export default function TaskReview() {
         </p>
       )}
 
+      {/* 回譯練習：這頁其他部分都是「再看一次」，只有這個是真的要你產出。
+          放在最上面，因為看過原文之後再回譯，效果會打折。 */}
+      {sentences.length > 0 && (
+        <button
+          onClick={() => {
+            stop()
+            navigate(`/archive/${task.id}/back-translate`)
+          }}
+          className="mt-5 flex w-full items-center justify-between rounded-2xl bg-teal-600 p-5 text-left text-white active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">✍️</span>
+            <span>
+              <span className="block font-bold">回譯練習</span>
+              <span className="block text-sm text-teal-50">
+                看中文說出{task.language}，再跟原句比對
+              </span>
+            </span>
+          </span>
+          <span className="text-teal-200">→</span>
+        </button>
+      )}
+
       {/* ---------- 聽力稿 ---------- */}
       {sentences.length > 0 && (
         <Section title={`🎧 聽力稿（${sentences.length} 句）`}>
