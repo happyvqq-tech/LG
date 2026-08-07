@@ -12,6 +12,7 @@
 // 泛聽要的是 98% 的詞都認得，讀起來不費力才聽得下去、也才累積得了量。
 // 用學習程度去生成泛聽材料，會得到一份「需要專心解碼」的東西，那又變回精聽了。
 
+import { JP_REGISTER_NEUTRAL } from './japaneseRegister'
 import type { Level, TaskLanguage } from './types'
 
 export interface ExtensiveInput {
@@ -39,7 +40,8 @@ export function extensiveSystemPrompt(input: ExtensiveInput): string {
 5. 不要加標題以外的任何標記、不要分段編號、不要附註解或生字表
 6. ${
     input.language === '日文'
-      ? '用丁寧體，漢字用常用漢字即可，不要用艱深的漢字詞'
+      ? `${JP_REGISTER_NEUTRAL}
+   漢字用常用漢字即可，不要用艱深的漢字詞`
       : input.language === '韓文'
         ? '用해요體，避免漢字語的艱深詞彙'
         : '用日常口語的詞彙與句型，避免學術腔'
