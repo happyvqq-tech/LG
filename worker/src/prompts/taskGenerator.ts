@@ -1,5 +1,6 @@
 // 任務生成器 system prompt（CLAUDE.md 6.1，變數以模板注入）
 
+import { JP_REGISTER_BY_SCENE } from './japaneseRegister'
 import type { ErrorRecord, GrammarPoint, Level, TaskLanguage } from './types'
 
 export interface TaskGeneratorInput {
@@ -76,7 +77,7 @@ export function taskGeneratorSystemPrompt(input: TaskGeneratorInput): string {
      而是把情境設計成不用那個句型就講不完整。一樣不明說、不提示，讓他自然地用或自然地犯
 3. 語塊（chunks）給 5-8 個。${input.language}的語塊指的是：${CHUNK_GUIDE[input.language]}
 4. 寫作題必須與情境直接相關，30-80 字即可完成
-5. 日文任務需標註丁寧體/普通體要求
+5. ${input.language === '日文' ? JP_REGISTER_BY_SCENE : '（本語言無語體切換要求）'}
 6. 若有「複習中的單字」，聽力稿要自然帶入其中 2-4 個（用不上的不要硬塞，也不要另外標註）
 
 只輸出 JSON，不加任何前言、不用 markdown 圍欄：
