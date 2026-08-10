@@ -288,11 +288,49 @@ export function sttSupported(): boolean {
  * 按住說話式的語音辨識：start() 開始、stop() 結束並取得逐字稿。
  * 不支援的瀏覽器請改用鍵盤輸入（CLAUDE.md 第 8 節降級方案）。
  */
+/** 停止辨識後等 onend 的上限；超過就用手上已有的逐字稿收尾，不讓畫面卡死 */
+const RECOGNITION_STOP_TIMEOUT_MS = 4000
+
+/**
+ * 把 SpeechRecognition 的錯誤碼翻成使用者看得懂、而且知道下一步該做什麼的話。
+ *
+ * service-not-allowed 在 iOS 上特別常見：Safari 的語音辨識要系統開啟「聽寫」，
+ * 而且從主畫面啟動的 PWA 常常整個不給用。原本會顯示成「語音辨識失敗：
+ * service-not-allowed」，使用者完全不知道那是什麼意思、也不知道能怎麼辦。
+ */
+function recognitionErrorMessage(code: string): string {
+  switch (code) {
+    case 'not-allowed':
+      return '麥克風權限被拒絕，請到瀏覽器設定開啟，或改用鍵盤輸入'
+    case 'service-not-allowed':
+      return 'iPhone 需要到「設定 → 一般 → 鍵盤」開啟「啟用聽寫」才能用語音辨識；也可以直接改用鍵盤輸入'
+    case 'network':
+      return '語音辨識需要網路，連線好像不穩，請改用鍵盤輸入或稍後再試'
+    case 'audio-capture':
+      return '找不到麥克風，請確認裝置有麥克風且沒有被其他 App 佔用'
+    case 'language-not-supported':
+      return '這個裝置的語音辨識不支援這個語言，請改用鍵盤輸入'
+    default:
+      return `語音辨識失敗（${code}），可以改用鍵盤輸入`
+  }
+}
+
 export class HoldToTalkRecognizer {
   private recognition: SpeechRecognitionLike | null = null
   private transcript = ''
   private finishResolve: ((text: string) => void) | null = null
   private finishReject: ((err: Error) => void) | null = null
+  /**
+   * 這次辨識是否已經結束（onend 或 onerror 發生過）。
+   *
+   * 沒有這個旗標的話會卡死：錯誤（麥克風權限、iOS 的 service-not-allowed）
+   * 發生在使用者按停止「之前」時，onend 早就跑完了，此時再對同一個
+   * recognition 呼叫 stop() 不會再觸發任何事件，stop() 的 Promise 就永遠
+   * 不會 settle，畫面永遠停在「錄音中」——按鈕全灰、怎麼按都沒反應。
+   */
+  private ended = false
+  /** 早於 stop() 發生的錯誤先存著，等 stop() 被呼叫時再丟出去，不要靜靜吞掉 */
+  private pendingError: Error | null = null
   /**
    * 最近一次 onresult 事件裡，各段辨識結果信心值的平均（0~1）。
    * 多數瀏覽器（含大部分 Android Chrome）不回傳這個值時恆為 0——呼叫端
@@ -300,11 +338,26 @@ export class HoldToTalkRecognizer {
    */
   lastConfidence = 0
 
+  /** 收尾：有人在等就交給他，沒人在等就記下來，等 stop() 來拿 */
+  private settle(err: Error | null): void {
+    this.ended = true
+    if (err) {
+      if (this.finishReject) this.finishReject(err)
+      else this.pendingError = err
+    } else {
+      this.finishResolve?.(this.transcript.trim())
+    }
+    this.finishResolve = null
+    this.finishReject = null
+  }
+
   start(lang: Language): void {
     const Ctor = getRecognitionCtor()
     if (!Ctor) throw new Error('此瀏覽器不支援語音辨識，請改用鍵盤輸入')
     this.transcript = ''
     this.lastConfidence = 0
+    this.ended = false
+    this.pendingError = null
     const rec = new Ctor()
     rec.lang = LANG_CODE[lang]
     rec.interimResults = true
@@ -325,37 +378,62 @@ export class HoldToTalkRecognizer {
       if (confCount > 0) this.lastConfidence = confSum / confCount
     }
     rec.onerror = (event) => {
-      // no-speech 不算失敗，只是沒聽到內容
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        const msg =
-          event.error === 'not-allowed'
-            ? '麥克風權限被拒絕，請到瀏覽器設定開啟，或改用鍵盤輸入'
-            : `語音辨識失敗：${event.error}`
-        this.finishReject?.(new Error(msg))
-        this.finishReject = null
-        this.finishResolve = null
-      }
+      // no-speech 不算失敗，只是沒聽到內容；aborted 是我們自己 cancel 的
+      if (event.error === 'no-speech' || event.error === 'aborted') return
+      this.settle(new Error(recognitionErrorMessage(event.error)))
     }
     rec.onend = () => {
-      this.finishResolve?.(this.transcript.trim())
-      this.finishResolve = null
-      this.finishReject = null
+      // 已經因錯誤收尾過就不要再蓋掉（onerror 之後瀏覽器還是會補一次 onend）
+      if (this.ended) return
+      this.settle(null)
     }
     this.recognition = rec
     rec.start()
   }
 
-  /** 放開按鈕：結束辨識並回傳逐字稿 */
+  /** 結束辨識並回傳逐字稿。無論如何都會 settle，不會卡住呼叫端。 */
   stop(): Promise<string> {
     return new Promise((resolve, reject) => {
-      if (!this.recognition) {
-        resolve('')
+      const rec = this.recognition
+      this.recognition = null
+
+      // 已經結束了（多半是中途出錯）：直接把結果或錯誤交出去，
+      // 不要再對死掉的 recognition 呼叫 stop()——那不會觸發任何事件
+      if (this.ended || !rec) {
+        const err = this.pendingError
+        this.pendingError = null
+        if (err) reject(err)
+        else resolve(this.transcript.trim())
         return
       }
+
       this.finishResolve = resolve
       this.finishReject = reject
-      this.recognition.stop()
-      this.recognition = null
+
+      // 保險絲：正常情況 onend 會在幾百毫秒內到，但只要有任何一種瀏覽器
+      // 在某個狀態下不觸發，使用者就會卡在錄音畫面出不來。寧可少收幾個字，
+      // 也不要讓畫面死掉。
+      const timer = setTimeout(() => {
+        if (this.finishResolve) this.settle(null)
+      }, RECOGNITION_STOP_TIMEOUT_MS)
+      const clear = () => clearTimeout(timer)
+      const origResolve = this.finishResolve
+      const origReject = this.finishReject
+      this.finishResolve = (text) => {
+        clear()
+        origResolve(text)
+      }
+      this.finishReject = (err) => {
+        clear()
+        origReject(err)
+      }
+
+      try {
+        rec.stop()
+      } catch {
+        // 已經停掉或狀態不對，交給上面的 settle/timeout 收尾
+        this.settle(null)
+      }
     })
   }
 
@@ -364,5 +442,7 @@ export class HoldToTalkRecognizer {
     this.recognition = null
     this.finishResolve = null
     this.finishReject = null
+    this.ended = true
+    this.pendingError = null
   }
 }

@@ -305,7 +305,32 @@ export default function Shadowing() {
           <p className="mt-1.5 text-center text-xs text-slate-400">先聽一次 AI 示範，再開始跟讀</p>
         )}
 
-        {errorMsg && <p className="mt-3 text-center text-red-600">{errorMsg}</p>}
+        {errorMsg && (
+          <div className="mt-3 rounded-2xl bg-red-50 p-4">
+            <p className="text-center text-red-600">{errorMsg}</p>
+            {/* 辨識壞掉時一定要有出口。跳過鍵原本綁在 attempts>=2，而 attempts
+                只在辨識成功時才加——麥克風不能用的人永遠等不到那一刻，
+                只能卡在第一句（實測回報）。 */}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => goNext(true)}
+                className="flex-1 rounded-xl bg-white py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-200"
+              >
+                跳過這句 →
+              </button>
+              <button
+                onClick={() => navigate('/speaking')}
+                className="flex-1 rounded-xl bg-white py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-slate-200"
+              >
+                換個練習方式
+              </button>
+            </div>
+            <p className="mt-2 text-center text-xs text-slate-400">
+              跟讀一定要用到語音辨識；如果這台裝置不支援，「討論文章重點」與「情境角色對話」
+              可以改用鍵盤輸入
+            </p>
+          </div>
+        )}
 
         {result && (
           <div
