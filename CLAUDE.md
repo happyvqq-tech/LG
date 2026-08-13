@@ -62,6 +62,7 @@
 │   │                       # BackTranslate（回譯：看中文產出目標語，再跟原句比對）
 │   │                       # Fluency（流利度 4/3/2：同段話講三次，時間遞減）
 │   │                       # ExtensiveHome / ExtensivePlayer（泛聽：長而簡單，只聽不練）
+│   │                       # Progress（進步存摺：累積量、本期vs上期、成長曲線、練習足跡、里程碑）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
@@ -70,6 +71,8 @@
 │   │   ├── googleTts.ts    # Google Cloud TTS 播放層（快取、預抓、失敗退回）
 │   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
 │   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
+│   │   ├── progressRules.ts # 進步存摺的分期、累積、熱力圖、里程碑計算（純函式）
+│   │   ├── progressService.ts # 進步存摺的資料讀取（五張表一次撈，不呼叫 AI）
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
 │   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
 │   │   └── prompts/        # 只剩「輸入介面 + 回應驗證函式」；
@@ -206,7 +209,7 @@ prompt 設計，React 元件反而是通用零件。搬到 Worker 之後瀏覽�
 
 - `profiles`：id, name, languages[], level, scenario_pool[]
 - `tasks`：id, profile_id, language, task_json, status(pending/done), created_at, completed_at
-- `errors`：id, profile_id, language, original, corrected, error_type, rule_note, status(active/pending_verify/resolved), verify_count, created_at
+- `errors`：id, profile_id, language, original, corrected, error_type, rule_note, status(active/pending_verify/resolved), verify_count, created_at, resolved_at（攻克時間，migration-011）
 - `grammar_points`：id, language, name, level, description, in_rotation(bool)
 - `taiwanese_scripts`：id, title, lines(jsonb: 台文漢字/台羅/華語對照), notes(jsonb), level, topic, audio_urls(jsonb), created_at
 - `extensive_listens`：id, profile_id, language, title, script, topic, level, created_at（泛聽教材，migration-009）
