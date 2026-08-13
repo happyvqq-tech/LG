@@ -72,6 +72,8 @@
 │   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
 │   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
 │   │   ├── celebrationRules.ts # 任務完成結算的主標優先序與里程碑判定（純函式）
+│   │   ├── familyRules.ts  # 全家一週摘要：分散點名、不做反向排名（純函式）
+│   │   ├── familyService.ts # 全家一週狀態（四張表各查一次，避免 N+1）
 │   │   ├── progressRules.ts # 進步存摺的分期、累積、熱力圖、里程碑計算（純函式）
 │   │   ├── progressService.ts # 進步存摺的資料讀取（五張表一次撈，不呼叫 AI）
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取

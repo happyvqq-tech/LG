@@ -9,6 +9,9 @@ import Avatar from '../components/Avatar'
 import LevelPicker from '../components/LevelPicker'
 import DailyPlanEditor from '../components/DailyPlanEditor'
 import DeleteMemberDialog from '../components/DeleteMemberDialog'
+import FamilyBoard from '../components/FamilyBoard'
+import { loadFamilyWeek } from '../lib/familyService'
+import type { MemberWeek } from '../lib/familyRules'
 import {
   ALL_SCENARIOS,
   LEVEL_INFO,
@@ -58,6 +61,9 @@ export default function MemberSelect() {
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Profile | null>(null)
   const [creating, setCreating] = useState(false)
+  /** 全家看板的資料。晚一點到不影響選成員，所以獨立載入、沒到就先不顯示 */
+  const [family, setFamily] = useState<MemberWeek[] | null>(null)
+  const [now] = useState(() => new Date())
   const [introOpen, setIntroOpen] = useState(() => {
     try {
       return localStorage.getItem(INTRO_DISMISSED_KEY) !== '1'
@@ -92,6 +98,24 @@ export default function MemberSelect() {
   useEffect(() => {
     void fetchProfiles()
   }, [])
+
+  // 成員抓到之後才去抓全家的一週狀態。刻意分開兩段，不合併進 fetchProfiles：
+  // 選成員是主要動線，不該為了看板的四個查詢多等
+  useEffect(() => {
+    if (profiles.length === 0) return
+    let alive = true
+    loadFamilyWeek(profiles, now)
+      .then((rows) => {
+        if (alive) setFamily(rows)
+      })
+      .catch(() => {
+        // 看板讀不到就整塊不顯示，不要在選成員的畫面上跳錯誤訊息嚇人
+        if (alive) setFamily(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [profiles, now])
 
   function handlePick(p: Profile) {
     selectProfile(p)
@@ -202,6 +226,11 @@ export default function MemberSelect() {
           </button>
         )}
       </div>
+
+      {/* 放在成員卡片下面而不是上面：開 App 最常做的事是「點自己的臉」，
+          擺在那之前等於每天多付一次滾動的成本。看板回答的是「大家最近如何」，
+          那是瀏覽問題不是動作，順序上該排在動作後面 */}
+      {family && <FamilyBoard members={family} profiles={profiles} now={now} />}
 
       {editing && (
         <ProfileDrawer
