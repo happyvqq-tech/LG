@@ -10,8 +10,10 @@ import {
   type ReviewPracticeResult,
 } from '../lib/prompts/reviewPractice'
 import PracticeQuiz from '../components/PracticeQuiz'
+import TaskCelebration from '../components/TaskCelebration'
 import { harvestFromTask } from '../lib/vocabService'
-import { logActivity } from '../lib/streakService'
+import { getStreak, logActivity } from '../lib/streakService'
+import type { CelebrationData } from '../lib/celebrationRules'
 import { asTaskLanguage } from '../lib/types'
 import type { DrillQuestion } from '../lib/types'
 
@@ -42,6 +44,8 @@ export default function Feedback() {
   const [practice, setPractice] = useState<DrillQuestion[] | null>(null)
   const [practiceLoading, setPracticeLoading] = useState(false)
   const [practiceError, setPracticeError] = useState('')
+  /** 完成後的結算畫面。有值就蓋在總結頁上面 */
+  const [celebration, setCelebration] = useState<CelebrationData | null>(null)
 
   // 弱點統計：依錯誤類別分組計數（多到少）
   const weakSpots = useMemo(() => {
@@ -59,6 +63,10 @@ export default function Feedback() {
   }, [task])
 
   if (loading || !task) return <p className="p-10 text-center text-slate-400">載入中…</p>
+
+  // 完成之後蓋掉整個總結頁。以前這裡是直接 navigate('/home')——
+  // 情緒最高的那一秒什麼都沒發生，等於白白丟掉一次收割成就感的機會
+  if (celebration) return <TaskCelebration data={celebration} />
 
   const { chunks, grading, speaking_transcript } = task.task_json
   const errorCount = grading?.errors.length ?? 0
@@ -96,7 +104,7 @@ export default function Feedback() {
     setErrorMsg('')
     try {
       // 推進錯誤狀態機（未再犯 +1／驗證通過 resolved／再犯退回）
-      await processTaskCompletion(task)
+      const resolvedErrors = await processTaskCompletion(task)
 
       // 本次語塊與用字錯誤自動進單字庫，之後由間隔重複接手
       const harvest = [
@@ -110,12 +118,27 @@ export default function Feedback() {
           .map((e) => ({ word: e.corrected, meaning_zh: e.rule_note, example: '' })),
       ]
       // 單字入庫失敗不該擋住任務完成
-      await harvestFromTask(task.profile_id, task.language, harvest).catch(() => 0)
+      const vocabAdded = await harvestFromTask(task.profile_id, task.language, harvest).catch(() => 0)
 
       await completeTask(task.id)
-      void logActivity(task.profile_id).catch(() => undefined)
+
+      // 結算畫面要顯示連續天數，所以這裡改成等 logActivity 寫完再讀。
+      // 這兩個查詢失敗都不能擋住任務完成——任務其實已經完成了，
+      // 只是慶祝畫面上少一個數字，退回 0 讓文案自動改走別的分支
+      const streakBefore = await getStreak(task.profile_id).then((s) => s.current).catch(() => 0)
+      await logActivity(task.profile_id).catch(() => undefined)
+      const streakAfter = await getStreak(task.profile_id).then((s) => s.current).catch(() => streakBefore)
+
       clearActiveTaskId()
-      navigate('/home')
+      setCelebration({
+        scenarioTitle: task.task_json.scenario_title,
+        streakBefore,
+        streakAfter,
+        resolvedErrors,
+        chunkCount: task.task_json.chunks.length,
+        vocabAdded,
+        fixedErrorCount: task.task_json.grading?.errors.length ?? 0,
+      })
     } catch (e: unknown) {
       busyRef.current = false
       setErrorMsg(`完成任務失敗：${String((e as Error).message)}`)
