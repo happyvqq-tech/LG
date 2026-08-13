@@ -71,6 +71,7 @@
 │   │   ├── googleTts.ts    # Google Cloud TTS 播放層（快取、預抓、失敗退回）
 │   │   ├── googleVoices.ts # Google 音色分級與排序（純函式）
 │   │   ├── reviewSchedule.ts # 教材間隔重聽排程 1/3/7/14/30 天（純函式）
+│   │   ├── celebrationRules.ts # 任務完成結算的主標優先序與里程碑判定（純函式）
 │   │   ├── progressRules.ts # 進步存摺的分期、累積、熱力圖、里程碑計算（純函式）
 │   │   ├── progressService.ts # 進步存摺的資料讀取（五張表一次撈，不呼叫 AI）
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取

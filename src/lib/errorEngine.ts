@@ -56,8 +56,15 @@ export async function syncTaskErrors(task: Task, graderErrors: GraderError[]): P
   return updateTaskJson(task, { inserted_error_ids: insertedIds })
 }
 
-/** 任務完成時呼叫：讀取現況 → 計算轉移 → 寫回 */
-export async function processTaskCompletion(task: Task): Promise<void> {
+/**
+ * 任務完成時呼叫：讀取現況 → 計算轉移 → 寫回。
+ *
+ * 回傳「這次真的攻克掉的錯誤」。這是整個 App 最值得慶祝的事件——
+ * 一個錯誤要連續兩次「有機會犯卻沒犯」才會進 pending_verify，
+ * 再通過一次刻意埋設的驗證才會 resolved，是實打實的進步證據。
+ * 以前這件事發生了卻沒人知道，狀態默默改掉、畫面跳回首頁。
+ */
+export async function processTaskCompletion(task: Task): Promise<ErrorRecord[]> {
   const currentErrors = task.task_json.grading?.errors ?? []
   const existing = await fetchOpenErrors(task.profile_id, task.language)
   const updates = computeErrorTransitions(
@@ -74,7 +81,11 @@ export async function processTaskCompletion(task: Task): Promise<void> {
     if (error) throw new Error(error.message)
   }
 
-  await stampResolvedAt(updates.filter((u) => u.patch.status === 'resolved').map((u) => u.id))
+  const resolvedIds = updates.filter((u) => u.patch.status === 'resolved').map((u) => u.id)
+  await stampResolvedAt(resolvedIds)
+
+  const byId = new Map(existing.map((e) => [e.id, e]))
+  return resolvedIds.map((id) => byId.get(id)).filter((e): e is ErrorRecord => e !== undefined)
 }
 
 /**
