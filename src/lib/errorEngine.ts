@@ -73,4 +73,25 @@ export async function processTaskCompletion(task: Task): Promise<void> {
     const { error } = await supabase.from('errors').update(u.patch).eq('id', u.id)
     if (error) throw new Error(error.message)
   }
+
+  await stampResolvedAt(updates.filter((u) => u.patch.status === 'resolved').map((u) => u.id))
+}
+
+/**
+ * 記錄「攻克時間」，給進步存摺算「這個月修掉幾個」用。
+ *
+ * 刻意跟上面的狀態機更新分開、而且失敗就算了：resolved_at 是 migration-011
+ * 才加的欄位，還沒跑那支 SQL 的資料庫會回 42703。狀態機的正確性遠比一個
+ * 統計欄位重要，不能因為少一欄就讓整個任務完成流程炸掉——那會讓使用者
+ * 卡在批改頁面出不去，而他其實什麼都沒做錯。
+ */
+async function stampResolvedAt(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  try {
+    // 回傳的 error 也刻意不檢查——supabase-js 不會丟例外，欄位不存在只會
+    // 出現在回傳值裡。這裡就是要「寫得進去最好，寫不進去無所謂」。
+    await supabase.from('errors').update({ resolved_at: new Date().toISOString() }).in('id', ids)
+  } catch {
+    // 連線層面的例外同樣吞掉：存摺少一個期間對照，不影響學習流程
+  }
 }

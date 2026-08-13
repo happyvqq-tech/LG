@@ -269,6 +269,22 @@ export default function TaskHome() {
       )}
 
       <section className="mt-6 grid gap-3">
+        {/* 進步存摺放第一個：學習最大的流失原因是「感覺不到自己在進步」，
+            而證據其實一直都在資料庫裡，只是以前沒有地方看得到 */}
+        <Link
+          to="/progress"
+          className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">📈</span>
+            <span className="text-left">
+              <span className="block font-bold">進步存摺</span>
+              <span className="block text-sm text-slate-500">累積天數・單字量・攻克的錯誤・這個月比上個月</span>
+            </span>
+          </span>
+          <span className="text-slate-300">→</span>
+        </Link>
+
         {/* 教材庫：過去生成的任務一直都存在 tasks 表裡，只是以前沒有入口去看，
             練完就再也翻不到了。有機會複習才對得起每天生成的內容。 */}
         <Link
