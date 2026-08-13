@@ -72,8 +72,11 @@ function as<T>(vars: unknown): T {
 }
 
 const REGISTRY: Record<PromptModule, PromptSpec> = {
+  // 教材是給人反覆聽讀的成品，連貫性比生成速度值錢。Haiku 會逐條滿足
+  // 硬性要求（文法點×3、單字帶入、錯誤埋設）卻犧牲句間銜接，成品前後不順；
+  // 生成一天只跑一次，用 Sonnet 的成本差可忽略
   taskGenerator: {
-    model: HAIKU,
+    model: SONNET,
     maxTokens: 3000,
     build: (v) => taskGeneratorSystemPrompt(as<TaskGeneratorInput>(v)),
   },
@@ -115,8 +118,9 @@ const REGISTRY: Record<PromptModule, PromptSpec> = {
     maxTokens: 2000,
     build: (v) => readingAidSystemPrompt(as<ReadingAidInput>(v)),
   },
+  // 600-900 字長文比短稿更吃連貫性（泛聽要「聽得下去」），同樣改用 Sonnet
   extensive: {
-    model: HAIKU,
+    model: SONNET,
     maxTokens: 3000,
     build: (v) => extensiveSystemPrompt(as<ExtensiveInput>(v)),
   },
