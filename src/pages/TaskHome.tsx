@@ -7,9 +7,11 @@ import { callClaudeJSON, ClaudeError } from '../lib/claude'
 import { isTaskJson, type TaskGeneratorInput } from '../lib/prompts/taskGenerator'
 import { createTask, getTodayPendingTask, setActiveTaskId } from '../lib/taskService'
 import { downloadIcs } from '../lib/ics'
+import { pickScenario } from '../lib/scenarioPool'
 import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
 import TodayDashboard from '../components/TodayDashboard'
+import LevelAdvice from '../components/LevelAdvice'
 import AppVersion from '../components/AppVersion'
 import { TAIGI_ENABLED } from '../lib/features'
 import { isTaskLanguage, LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson, type TaskLanguage } from '../lib/types'
@@ -101,8 +103,9 @@ export default function TaskHome() {
       if (expError) throw new Error(expError.message)
       const exposureErrors = (expData ?? []) as ErrorRecord[]
 
-      // 3. 情境隨機取自成員情境池
-      const scenario = pickRandom(profile.scenario_pool.length > 0 ? profile.scenario_pool : ['日常'], 1)[0]
+      // 3. 情境：多半取自成員情境池，偶爾（15%）換成一個「意料之外」的場合。
+      // 六個常規類別都是順利的日常，但真實能力是在摩擦中被考驗的（見 lib/scenarioPool.ts）
+      const { scenario, surprise } = pickScenario(profile.scenario_pool, Math.random(), Math.random())
 
       // 4. 單字庫中複習中的字，讓任務自然帶到（學了馬上用得到）
       const vocabWords = await getWordsForTask(profile.id, language)
@@ -118,6 +121,10 @@ export default function TaskHome() {
             pendingErrors: (errData ?? []) as ErrorRecord[],
             exposureErrors,
             vocabWords,
+            // migration-012 之前的資料庫沒有這一欄，讀回來是 undefined，
+            // prompt 那邊會顯示「未提供」，不會壞掉
+            interests: profile.interests ?? undefined,
+            surprise,
           } satisfies TaskGeneratorInput,
           messages: [{ role: 'user', content: '請生成今日任務' }],
         },
@@ -164,6 +171,12 @@ export default function TaskHome() {
       </header>
 
       <TodayDashboard profile={profile} task={task} taskLoading={loading} />
+
+      {/* 難度建議。只在資料夠、而且訊號明確時才出現，按「先維持」兩週內不再問。
+          擺在儀表板下面而不是最上面：它是偶爾出現的插話，不是每天的主線 */}
+      {hasTaskLanguage && (
+        <LevelAdvice profile={profile} language={language} onChanged={() => void refreshProfile()} />
+      )}
 
       {profile.daily_plan && profile.daily_plan.days.length > 0 && (
         <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">

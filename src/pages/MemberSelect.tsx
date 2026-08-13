@@ -11,6 +11,7 @@ import DailyPlanEditor from '../components/DailyPlanEditor'
 import DeleteMemberDialog from '../components/DeleteMemberDialog'
 import FamilyBoard from '../components/FamilyBoard'
 import { loadFamilyWeek } from '../lib/familyService'
+import { saveProfile } from '../lib/profileService'
 import type { MemberWeek } from '../lib/familyRules'
 import {
   ALL_SCENARIOS,
@@ -287,8 +288,11 @@ function ProfileDrawer({
   const [scenarioPool, setScenarioPool] = useState<Scenario[]>(profile?.scenario_pool ?? [...ALL_SCENARIOS])
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null)
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(profile?.daily_plan ?? null)
+  const [interests, setInterests] = useState(profile?.interests ?? '')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  /** 資料庫還沒有 interests 欄位（沒跑 migration-012），提示但不擋存檔 */
+  const [interestsDropped, setInterestsDropped] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function toggle<T>(list: T[], item: T): T[] {
@@ -322,24 +326,28 @@ function ProfileDrawer({
     }
     setSaving(true)
     setSaveError('')
+    setInterestsDropped(false)
 
-    const payload = {
-      name: name.trim(),
-      languages,
-      level,
-      scenario_pool: scenarioPool,
-      avatar_url: avatarUrl,
-      daily_plan: dailyPlan,
-    }
-
-    const { error } =
-      mode === 'edit' && profile
-        ? await supabase.from('profiles').update(payload).eq('id', profile.id)
-        : await supabase.from('profiles').insert(payload)
+    const result = await saveProfile(
+      {
+        name: name.trim(),
+        languages,
+        level,
+        scenario_pool: scenarioPool,
+        avatar_url: avatarUrl,
+        daily_plan: dailyPlan,
+        interests: interests.trim() || null,
+      },
+      mode === 'edit' && profile ? profile.id : undefined,
+    )
 
     setSaving(false)
-    if (error) {
-      setSaveError(`儲存失敗：${error.message}`)
+    if (result.error) {
+      setSaveError(`儲存失敗：${result.error}`)
+    } else if (result.interestsDropped) {
+      // 其他設定都存好了，只有興趣沒進去。留在原地告訴使用者原因，
+      // 直接關掉抽屜的話他會以為存好了，下次發現不見還以為是 bug
+      setInterestsDropped(true)
     } else {
       onSaved()
     }
@@ -440,6 +448,24 @@ function ProfileDrawer({
           ))}
         </div>
 
+        {/* 個人化的來源。成人學習者對「跟自己有關的材料」的投入度遠高於通用教材，
+            而 AI 生成最大的優勢正是無限個人化——這個欄位就是把兩件事接起來 */}
+        <label className="mt-5 block text-sm font-semibold text-slate-600" htmlFor="member-interests">
+          興趣與近況（選填）
+        </label>
+        <textarea
+          id="member-interests"
+          value={interests}
+          onChange={(e) => setInterests(e.target.value)}
+          rows={3}
+          maxLength={300}
+          placeholder="例如：最近在追日劇、十月要去大阪自由行、做軟體業、喜歡爬山和咖啡"
+          className="mt-1 w-full rounded-xl border border-slate-300 p-3 leading-relaxed"
+        />
+        <p className="mt-1.5 text-xs text-slate-400">
+          任務會盡量長在這些事情上面——例如寫了「十月要去大阪」，旅遊情境就會變成大阪的旅館與車站
+        </p>
+
         <p className="mt-5 text-sm font-semibold text-slate-600">每日學習提醒</p>
         <div className="mt-2">
           <DailyPlanEditor plan={dailyPlan} onChange={setDailyPlan} />
@@ -457,6 +483,20 @@ function ProfileDrawer({
         )}
 
         {saveError && <p className="mt-4 rounded-xl bg-red-50 p-3 text-red-600">{saveError}</p>}
+
+        {interestsDropped && (
+          <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm leading-relaxed text-amber-800">
+            其他設定都存好了，但「興趣與近況」沒有存進去——資料庫還沒有這個欄位。
+            到 Supabase 的 SQL Editor 跑一次 <code className="font-mono">supabase/migration-012.sql</code>，
+            再回來存一次就會生效。
+            <button
+              onClick={onSaved}
+              className="mt-2 block w-full rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white"
+            >
+              知道了
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 flex gap-3">
           <button

@@ -71,6 +71,9 @@ export interface Profile {
   vocab_pref: VocabPref | null
   /** 古文程度：入門／基礎／進階／高階（見 data/classicalIndex.ts） */
   classical_level: string | null
+  /** 興趣與近況（追的劇、工作、計畫中的旅行），任務生成器據此個人化（migration-012）。
+   *  還沒跑那支 migration 的資料庫讀回來會是 undefined，所以型別留 optional */
+  interests?: string | null
   created_at: string
 }
 

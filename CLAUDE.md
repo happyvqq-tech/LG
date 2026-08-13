@@ -78,6 +78,8 @@
 │   │   ├── progressRules.ts # 進步存摺的分期、累積、熱力圖、里程碑計算（純函式）
 │   │   ├── progressService.ts # 進步存摺的資料讀取（五張表一次撈，不呼叫 AI）
 │   │   ├── quickRules.ts   # 五分鐘模式的排卡與時間預算（純函式）
+│   │   ├── levelAdviceRules.ts # 難度升降建議：只建議不自動改（純函式）
+│   │   ├── scenarioPool.ts # 情境挑選，含 15% 的「意料之外」情境（純函式）
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
 │   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
 │   │   └── prompts/        # 只剩「輸入介面 + 回應驗證函式」；
@@ -212,7 +214,7 @@ prompt 設計，React 元件反而是通用零件。搬到 Worker 之後瀏覽�
 
 完整 SQL 在 `supabase/schema.sql`（BUILD_STEPS 步驟 3 建立）。
 
-- `profiles`：id, name, languages[], level, scenario_pool[]
+- `profiles`：id, name, languages[], level, scenario_pool[], interests（興趣與近況，migration-012）
 - `tasks`：id, profile_id, language, task_json, status(pending/done), created_at, completed_at
 - `errors`：id, profile_id, language, original, corrected, error_type, rule_note, status(active/pending_verify/resolved), verify_count, created_at, resolved_at（攻克時間，migration-011）
 - `grammar_points`：id, language, name, level, description, in_rotation(bool)

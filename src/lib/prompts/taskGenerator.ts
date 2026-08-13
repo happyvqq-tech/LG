@@ -18,6 +18,10 @@ export interface TaskGeneratorInput {
   exposureErrors?: ErrorRecord[]
   /** 單字庫中學習中的字，讓任務自然用到（學了馬上碰到） */
   vocabWords?: string[]
+  /** 成員自己填的興趣與近況，讓情境長在他真的在乎的事情上（migration-012） */
+  interests?: string
+  /** 這次是「意料之外」的情境（吵架、客訴、急診…），要有社交摩擦 */
+  surprise?: boolean
 }
 
 /** 驗證任務生成器輸出的最小必要結構 */
