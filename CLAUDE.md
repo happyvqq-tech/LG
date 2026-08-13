@@ -63,6 +63,7 @@
 │   │                       # Fluency（流利度 4/3/2：同段話講三次，時間遞減）
 │   │                       # ExtensiveHome / ExtensivePlayer（泛聽：長而簡單，只聽不練）
 │   │                       # Progress（進步存摺：累積量、本期vs上期、成長曲線、練習足跡、里程碑）
+│   │                       # QuickSession（五分鐘模式：到期單字＋舊錯＋重聽，做完算連續天數）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
@@ -76,6 +77,7 @@
 │   │   ├── familyService.ts # 全家一週狀態（四張表各查一次，避免 N+1）
 │   │   ├── progressRules.ts # 進步存摺的分期、累積、熱力圖、里程碑計算（純函式）
 │   │   ├── progressService.ts # 進步存摺的資料讀取（五張表一次撈，不呼叫 AI）
+│   │   ├── quickRules.ts   # 五分鐘模式的排卡與時間預算（純函式）
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
 │   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
 │   │   └── prompts/        # 只剩「輸入介面 + 回應驗證函式」；

@@ -269,7 +269,24 @@ export default function TaskHome() {
       )}
 
       <section className="mt-6 grid gap-3">
-        {/* 進步存摺放第一個：學習最大的流失原因是「感覺不到自己在進步」，
+        {/* 五分鐘模式放最前面：連續天數斷掉通常不是因為不想學，是今天真的沒空，
+            於是跳過、隔天發現斷了就放棄。這是那個台階，忙的時候要第一眼看得到。
+            用琥珀色而不是白卡，讓它一眼就跟「常規入口」分得開 */}
+        <Link
+          to="/quick"
+          className="flex w-full items-center justify-between rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200/70 active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="text-xl">⏱️</span>
+            <span className="text-left">
+              <span className="block font-bold text-amber-900">今天只有 5 分鐘？</span>
+              <span className="block text-sm text-amber-800/70">到期單字＋舊錯＋重聽・做完一樣算連續天數</span>
+            </span>
+          </span>
+          <span className="text-amber-300">→</span>
+        </Link>
+
+        {/* 進步存摺：學習最大的流失原因是「感覺不到自己在進步」，
             而證據其實一直都在資料庫裡，只是以前沒有地方看得到 */}
         <Link
           to="/progress"

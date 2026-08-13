@@ -5,6 +5,7 @@ import MemberSelect from './pages/MemberSelect'
 import TaskHome from './pages/TaskHome'
 import TaskArchive from './pages/TaskArchive'
 import Progress from './pages/Progress'
+import QuickSession from './pages/QuickSession'
 import TaskReview from './pages/TaskReview'
 import BackTranslate from './pages/BackTranslate'
 import Listening from './pages/Listening'
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/" element={<MemberSelect />} />
       <Route path="/home" element={guarded(<TaskHome />)} />
       <Route path="/progress" element={guarded(<Progress />)} />
+      <Route path="/quick" element={guarded(<QuickSession />)} />
       <Route path="/archive" element={guarded(<TaskArchive />)} />
       <Route path="/archive/:taskId" element={guarded(<TaskReview />)} />
       <Route path="/archive/:taskId/back-translate" element={guarded(<BackTranslate />)} />
