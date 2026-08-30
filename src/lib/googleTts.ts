@@ -78,11 +78,31 @@ export function googleTtsDisabledReason(): string {
   return disabledReason
 }
 
+/**
+ * 停用時通知 UI。
+ *
+ * 為什麼補這一段：原本 disabledReason 只是被記下來，沒有任何地方讀它——
+ * Google 語音掛掉時 App 會安靜地改用瀏覽器語音，使用者只覺得「聲音突然變機器人」
+ * 或「TTS 壞了」，卻沒有任何線索。而 Worker 其實已經回傳了很具體的原因
+ * （金鑰無效／API 沒啟用／額度用完），只是一路被丟掉。
+ * 靜默降級比壞掉更難查——壞掉至少你知道要去查。
+ */
+type DisabledListener = (reason: string) => void
+const disabledListeners = new Set<DisabledListener>()
+
+export function subscribeGoogleTtsDisabled(cb: DisabledListener): () => void {
+  // 訂閱時如果已經停用了，立刻補送一次——元件掛載得比失敗晚是常態
+  if (disabledForSession) cb(disabledReason)
+  disabledListeners.add(cb)
+  return () => disabledListeners.delete(cb)
+}
+
 function noteFailure(message: string): void {
   consecutiveFailures++
-  if (consecutiveFailures >= FAILURE_LIMIT) {
+  if (consecutiveFailures >= FAILURE_LIMIT && !disabledForSession) {
     disabledForSession = true
     disabledReason = message
+    for (const cb of disabledListeners) cb(message)
   }
 }
 
