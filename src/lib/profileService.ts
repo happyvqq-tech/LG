@@ -5,7 +5,7 @@
 // 而這是編輯成員——存不了檔等於連改名字都做不到，比少一個個人化欄位嚴重太多。
 // 所以偵測到欄位不存在就拿掉那一欄重送，讓其餘設定照常存下去。
 
-import { supabase } from './supabase'
+import { describeSupabaseError, isNetworkFailure, supabase } from './supabase'
 import type { DailyPlan, Language, Level, Scenario } from './types'
 
 export interface ProfilePayload {
@@ -25,7 +25,7 @@ export interface SaveResult {
   interestsDropped: boolean
 }
 
-/** PostgreSQL：undefined column */
+/** PostgreSQL：undefined column。PostgREST 的 schema cache 則回 PGRST204 */
 const UNDEFINED_COLUMN = '42703'
 
 function isMissingInterests(err: { code?: string; message?: string } | null): boolean {
@@ -45,14 +45,20 @@ export async function saveProfile(
   const first = await write(payload)
   if (!first.error) return { error: null, interestsDropped: false }
 
+  // 請求根本沒送達時不要重試拿掉 interests——那不是欄位的問題，
+  // 重送一次只會再失敗一次，還會讓使用者以為是新欄位害的
+  if (isNetworkFailure(first.error, first.status)) {
+    return { error: describeSupabaseError(first.error, first.status), interestsDropped: false }
+  }
+
   if (isMissingInterests(first.error)) {
     const { interests: _dropped, ...rest } = payload
     const retry = await write(rest)
     return {
-      error: retry.error ? retry.error.message : null,
+      error: retry.error ? describeSupabaseError(retry.error, retry.status) : null,
       interestsDropped: !retry.error,
     }
   }
 
-  return { error: first.error.message, interestsDropped: false }
+  return { error: describeSupabaseError(first.error, first.status), interestsDropped: false }
 }
