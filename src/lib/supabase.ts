@@ -35,3 +35,31 @@ export const supabase = createClient(
   anonKey || 'missing-anon-key',
   { global: { fetch: fetchWithAccess } },
 )
+
+/**
+ * 把 supabase 的錯誤翻成看得懂、而且知道下一步要做什麼的中文。
+ *
+ * 為什麼需要這支：postgrest-js 在底層 fetch 整個失敗（請求根本沒送達）時，
+ * 會把例外包成 `${name}: ${message}` 丟進 error.message，於是畫面上就出現
+ * 「儲存失敗：TypeError: Load failed」——那是 Safari 對「這個 fetch 掛了」的
+ * 說法，對使用者完全沒有資訊量，更糟的是它跟「伺服器收到了但拒絕」長得一模一樣，
+ * 而這兩件事的處理方式完全相反（一個要去看資料庫活著沒，一個要去看欄位或權限）。
+ *
+ * 判斷依據用 status：請求沒送達時 postgrest 會給 status 0。
+ * 另外比對訊息字樣當備援，因為三個瀏覽器的用詞都不一樣
+ * （Safari「Load failed」、Chrome「Failed to fetch」、Firefox「NetworkError…」）。
+ */
+const NETWORK_HINTS = ['load failed', 'failed to fetch', 'networkerror', 'network request failed']
+
+export function isNetworkFailure(error: { message?: string } | null, status?: number): boolean {
+  if (status === 0) return true
+  const m = (error?.message ?? '').toLowerCase()
+  return NETWORK_HINTS.some((h) => m.includes(h))
+}
+
+export function describeSupabaseError(error: { message?: string } | null, status?: number): string {
+  if (isNetworkFailure(error, status)) {
+    return '連不上資料庫（請求沒送出去）。先確認網路，再到 Supabase 後台看看專案是不是被暫停了——免費方案閒置一段時間會自動暫停，按一下恢復就好。'
+  }
+  return error?.message ?? '未知錯誤'
+}

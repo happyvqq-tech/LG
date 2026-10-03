@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { describeSupabaseError, supabase } from '../lib/supabase'
 import { useProfile } from '../lib/profileContext'
 import { fileToAvatarDataUrl } from '../lib/avatar'
 import { TAIGI_ENABLED } from '../lib/features'
@@ -88,7 +88,7 @@ export default function MemberSelect() {
     setLoadError('')
     const { data, error } = await supabase.from('profiles').select('*').order('created_at')
     if (error) {
-      setLoadError(`讀取成員失敗：${error.message}`)
+      setLoadError(`讀取成員失敗：${describeSupabaseError(error)}`)
     } else {
       // 防禦：回應非陣列時不讓整頁白屏
       setProfiles(Array.isArray(data) ? (data as Profile[]) : [])
