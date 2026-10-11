@@ -9,8 +9,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useProfile } from '../lib/profileContext'
 import { listPastTasks } from '../lib/taskService'
+import { listAllSongs } from '../lib/songService'
 import { loadReviewedToday, markReviewed, pickReviewTasks } from '../lib/reviewSchedule'
-import { isTaskLanguage, type Language, type Task } from '../lib/types'
+import { isTaskLanguage, type Language, type Song, type Task } from '../lib/types'
 
 const ALL = '__all__'
 
@@ -32,6 +33,8 @@ export default function TaskArchive() {
   const navigate = useNavigate()
   const { profile } = useProfile()
   const [tasks, setTasks] = useState<Task[] | null>(null)
+  /** 歌曲也是生成過的教材。以前只有 /song 進得去，使用者退出就再也找不到 */
+  const [songs, setSongs] = useState<Song[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [langFilter, setLangFilter] = useState<Language | typeof ALL>(ALL)
 
@@ -39,6 +42,11 @@ export default function TaskArchive() {
     if (!profile) return
     let alive = true
     setErrorMsg('')
+    // 歌曲獨立載入：它失敗不該讓整個教材庫打不開（例如還沒跑 migration-013）
+    listAllSongs(profile.id)
+      .then((list) => alive && setSongs(list))
+      .catch(() => alive && setSongs([]))
+
     listPastTasks(profile.id, null)
       .then((list) => {
         if (alive) setTasks(list)
@@ -88,7 +96,7 @@ export default function TaskArchive() {
         <div>
           <h1 className="text-2xl font-bold">教材庫</h1>
           <p className="mt-1 text-sm text-slate-500">
-            過去生成的任務都留著，點進去可以重聽、重讀、看批改
+            生成過的教材都留著，點進去可以重聽、重讀、看批改
           </p>
         </div>
         <Link
@@ -116,6 +124,35 @@ export default function TaskArchive() {
       )}
 
       {errorMsg && <p className="mt-5 rounded-xl bg-red-50 p-4 text-red-600">{errorMsg}</p>}
+
+      {/* 歌曲刻意不跟著上面的語言篩選走：那個篩選是給任務用的，
+          而歌曲最容易發生的狀況正是「換個語言就以為教材不見了」 */}
+      {songs.length > 0 && (
+        <section className="mt-6">
+          <h2 className="px-1 font-bold text-slate-800">歌曲（{songs.length}）</h2>
+          <p className="mt-0.5 px-1 text-xs text-slate-500">接著上次的段落繼續練</p>
+          <div className="mt-2 grid gap-3">
+            {songs.map((s) => (
+              <Link
+                key={s.id}
+                to={`/song/${s.id}`}
+                className="block rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+              >
+                <span className="flex items-center gap-2">
+                  <span>🎵</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-bold">{s.title}</span>
+                    <span className="block truncate text-sm text-slate-500">
+                      {s.artist}・{s.language}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-slate-300">→</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {tasks === null && <p className="mt-10 text-center text-slate-400">載入中…</p>}
 

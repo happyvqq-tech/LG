@@ -62,7 +62,7 @@
 ├── src/
 │   ├── pages/              # MemberSelect / TaskHome / Listening / Reading /
 │   │                       # Speaking / Writing / Rewrite / Feedback / GrammarDrill / Taiwanese
-│   │                       # TaskArchive / TaskReview（教材庫：翻閱過去任務複習，唯讀）
+│   │                       # TaskArchive / TaskReview（教材庫：所有生成過的教材——任務與歌曲——都在這裡翻閱）
 │   │                       # BackTranslate（回譯：看中文產出目標語，再跟原句比對）
 │   │                       # Fluency（流利度 4/3/2：同段話講三次，時間遞減）
 │   │                       # ExtensiveHome / ExtensivePlayer（泛聽：長而簡單，只聽不練）

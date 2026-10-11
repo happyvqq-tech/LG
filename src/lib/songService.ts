@@ -98,6 +98,24 @@ export async function listSongs(
   return (data ?? []) as Song[]
 }
 
+/**
+ * 這個成員的所有歌曲，不分語言。
+ *
+ * 為什麼需要一支不篩語言的：歌單頁回來時語言會重設成第一個學習語言，
+ * 同時學兩種語言的人會發現剛做好的教材「不見了」——其實只是被篩掉。
+ * 教材庫也要用這支，那裡本來就是「所有生成過的東西都在這」。
+ */
+export async function listAllSongs(profileId: string, limit = 100): Promise<Song[]> {
+  const { data, error } = await supabase
+    .from('songs')
+    .select('*')
+    .eq('profile_id', profileId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Song[]
+}
+
 export async function getSong(id: string, profileId: string): Promise<Song | null> {
   const { data, error } = await supabase
     .from('songs')
