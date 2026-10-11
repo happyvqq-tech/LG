@@ -69,9 +69,17 @@ export function fetchLyrics(track: string, artist: string): Promise<FetchedLyric
  * 呼叫端改成請使用者貼一次連結。
  */
 export function findVideo(track: string, artist: string): Promise<string | null> {
-  return postWorker<{ videoId?: string }>('/api/youtube', {
-    q: `${artist} ${track} official audio`,
-  }).then((r) => r?.videoId ?? null)
+  return findVideoByQuery(`${artist} ${track} official audio`).then((r) => r?.videoId ?? null)
+}
+
+/**
+ * 通用的 YouTube 搜尋（影片模組也用這支）。
+ * 沒設 YOUTUBE_API_KEY 的部署會回 null，呼叫端改成讓使用者自己挑。
+ */
+export function findVideoByQuery(q: string): Promise<{ videoId: string; videoTitle: string } | null> {
+  return postWorker<{ videoId?: string; videoTitle?: string }>('/api/youtube', { q }).then((r) =>
+    r?.videoId ? { videoId: r.videoId, videoTitle: r.videoTitle ?? '' } : null,
+  )
 }
 
 /** 從各種 YouTube 網址寫法裡挖出影片 ID；本來就是 ID 的話原樣回傳 */

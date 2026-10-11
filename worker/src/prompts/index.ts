@@ -28,6 +28,8 @@ import { readingAidSystemPrompt, type ReadingAidInput } from './readingAid'
 import { reviewPracticeSystemPrompt, type ReviewPracticeInput } from './reviewPractice'
 import { songLessonSystemPrompt, type SongLessonInput } from './songLesson'
 import { songPickerSystemPrompt, type SongPickerInput } from './songPicker'
+import { videoLessonSystemPrompt, type VideoLessonInput } from './videoLesson'
+import { videoPickerSystemPrompt, type VideoPickerInput } from './videoPicker'
 import { taigiScriptSystemPrompt, type TaigiScriptInput } from './taigiScript'
 import { taskGeneratorSystemPrompt, type TaskGeneratorInput } from './taskGenerator'
 import { translateSystemPrompt, type TranslateInput } from './translate'
@@ -57,6 +59,8 @@ export type PromptModule =
   | 'classicalTranslationGrade'
   | 'songPicker'
   | 'songLesson'
+  | 'videoPicker'
+  | 'videoLesson'
 
 interface PromptSpec {
   model: string
@@ -172,6 +176,19 @@ const REGISTRY: Record<PromptModule, PromptSpec> = {
     model: SONNET,
     maxTokens: 2500,
     build: (v) => songLessonSystemPrompt(as<SongLessonInput>(v)),
+  },
+  // 選片方向要判斷「什麼素材在這個程度聽得下去」，而且要避開幻想出不存在的頻道
+  videoPicker: {
+    model: SONNET,
+    maxTokens: 2000,
+    build: (v) => videoPickerSystemPrompt(as<VideoPickerInput>(v)),
+  },
+  // 判斷「這句用耳朵聽會不會跟字面差很遠」是這個模組的全部價值。
+  // token 上限跟歌曲教材一樣收在 2500——整份一次產出，太大會在手機上逾時
+  videoLesson: {
+    model: SONNET,
+    maxTokens: 2500,
+    build: (v) => videoLessonSystemPrompt(as<VideoLessonInput>(v)),
   },
 }
 

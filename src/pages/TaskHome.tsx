@@ -353,6 +353,27 @@ export default function TaskHome() {
           </Link>
         )}
 
+        {/* 影片：歌曲練節奏，影片練的是另一件事——真實語速下的連音與脫落。
+            「每個字都懂卻聽不懂」九成不是單字不夠，是 what do you 在嘴裡變成
+            whaddaya、〜ている 變成〜てる，背過的形狀從沒以他認得的樣子出現過 */}
+        {hasTaskLanguage && (
+          <Link
+            to="/video"
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">🎬</span>
+              <span className="text-left">
+                <span className="block font-bold">影片</span>
+                <span className="block text-sm text-slate-500">
+                  真實口語・逐句播原聲・專治連音與脫落
+                </span>
+              </span>
+            </span>
+            <span className="text-slate-300">→</span>
+          </Link>
+        )}
+
         {/* 泛聽跟每日任務的精聽是兩件事：精聽建立準確度，泛聽建立自動化與語感。
             每日任務一週只有約 1,500 字的輸入，靠那個量習得不了東西 */}
         {hasTaskLanguage && (

@@ -77,6 +77,8 @@ export type PromptModule =
   | 'classicalTranslationGrade'
   | 'songPicker'
   | 'songLesson'
+  | 'videoPicker'
+  | 'videoLesson'
 
 export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse' | 'access_denied'
 

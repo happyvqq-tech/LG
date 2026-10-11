@@ -315,6 +315,22 @@ export interface Song {
   created_at: string
 }
 
+/** 影片教材（對應 videos 表，migration-015）
+ *  逐字稿是使用者從 YouTube 的「顯示轉錄稿」複製貼上的——
+ *  captions.download 只有影片擁有者能用，沒有免費的自動來源 */
+export interface Video {
+  id: string
+  profile_id: string
+  language: Language
+  title: string
+  /** YouTube 影片 ID（11 碼）。影片本身不代管，播放走官方嵌入 */
+  youtube_id: string
+  transcript: string
+  /** videoLesson 的輸出，型別見 lib/prompts/video.ts 的 VideoLesson */
+  lesson: unknown
+  created_at: string
+}
+
 export interface TaiwaneseScriptLine {
   hanji: string
   tailo: string

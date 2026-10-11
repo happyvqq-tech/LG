@@ -9,6 +9,8 @@ import Progress from './pages/Progress'
 import QuickSession from './pages/QuickSession'
 import SongHome from './pages/SongHome'
 import SongStudy from './pages/SongStudy'
+import VideoHome from './pages/VideoHome'
+import VideoStudy from './pages/VideoStudy'
 import TaskReview from './pages/TaskReview'
 import BackTranslate from './pages/BackTranslate'
 import Listening from './pages/Listening'
@@ -53,6 +55,8 @@ export default function App() {
         <Route path="/quick" element={guarded(<QuickSession />)} />
         <Route path="/song" element={guarded(<SongHome />)} />
         <Route path="/song/:songId" element={guarded(<SongStudy />)} />
+        <Route path="/video" element={guarded(<VideoHome />)} />
+        <Route path="/video/:videoId" element={guarded(<VideoStudy />)} />
         <Route path="/archive" element={guarded(<TaskArchive />)} />
         <Route path="/archive/:taskId" element={guarded(<TaskReview />)} />
         <Route path="/archive/:taskId/back-translate" element={guarded(<BackTranslate />)} />
