@@ -168,6 +168,25 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
     if (res.status === 529 || res.status === 503) {
       throw new ClaudeError('api', 'AI 服務忙碌中，稍等幾秒再按重試')
     }
+    // 402／403 是「帳號要處理」，不是「等一下再試就會好」。
+    // 混進下面那句籠統的「稍後再試」會讓人一直重試一直失敗，
+    // 卻完全不知道要去 console 看一眼（403 的官方定義是
+    // permission_error：這組憑證的組織或 workspace 不被允許，
+    // 或被區域限制／身分驗證擋下，而且明確標示為不可重試）
+    if (res.status === 402) {
+      throw new ClaudeError(
+        'api',
+        `AI 服務錯誤（402）${detail ? '：' + detail : ''}`,
+        'AI 帳號的額度或付款方式有問題，重試不會好。請到 console.anthropic.com 看一下。',
+      )
+    }
+    if (res.status === 403) {
+      throw new ClaudeError(
+        'api',
+        `AI 服務錯誤（403）${detail ? '：' + detail : ''}`,
+        'AI 帳號的權限被擋住了，重試不會好——這不是某個功能壞掉。請到 console.anthropic.com 檢查帳號狀態（額度、金鑰是否停用、有沒有要求身分驗證）。',
+      )
+    }
     // 原始技術細節（狀態碼、後端錯誤字串）留在 message 供除錯，
     // 使用者看到的是白話的 friendlyMessage（見稽核報告 P2-1）
     throw new ClaudeError(

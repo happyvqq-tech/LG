@@ -103,7 +103,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 12
+const WORKER_VERSION = 13
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -859,6 +859,26 @@ export default {
           upstream: JSON.parse(text),
         },
         401,
+        origin,
+      )
+    }
+
+    // 診斷：403 跟 401 一樣值得附加資訊。官方定義是 permission_error——
+    // 這組憑證的組織／workspace 不被允許，或被區域限制、身分驗證擋下，
+    // 而且明確標示不可重試。附上 key 前綴讓人確認是哪一把，
+    // 並講清楚「組織用不了的模型通常是 404 而不是 403」，省得往模型方向查錯邊
+    if (upstream.status === 403) {
+      return jsonResponse(
+        {
+          error: 'anthropic_permission_denied',
+          message:
+            `Anthropic 回傳 403（permission_error）。key 前綴 "${env.ANTHROPIC_API_KEY.slice(0, 7)}…"。` +
+            '這是帳號層級的權限問題，不是模型或這支程式的問題（模型不可用通常回 404）。' +
+            '請到 console.anthropic.com 檢查：額度與付款、金鑰是否被停用、' +
+            '組織有沒有待完成的身分驗證，以及是否有區域限制。',
+          upstream: text.slice(0, 500),
+        },
+        403,
         origin,
       )
     }
