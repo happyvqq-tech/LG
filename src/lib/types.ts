@@ -294,6 +294,23 @@ export interface ExtensiveListen {
   created_at: string
 }
 
+/** 歌曲教材（對應 songs 表，migration-013）
+ *  歌詞是使用者自己從串流平台貼上的，不是 AI 生成的——
+ *  模型背的歌詞會錯，而教錯的歌詞比不教更糟（見 worker/src/prompts/songPicker.ts） */
+export interface Song {
+  id: string
+  profile_id: string
+  language: Language
+  title: string
+  artist: string
+  lyrics: string
+  /** songLesson 的輸出，型別見 lib/prompts/song.ts 的 SongLesson */
+  lesson: unknown
+  /** 學到第幾段（0-based） */
+  segment_index: number
+  created_at: string
+}
+
 export interface TaiwaneseScriptLine {
   hanji: string
   tailo: string

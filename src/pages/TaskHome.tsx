@@ -331,6 +331,26 @@ export default function TaskHome() {
           <span className="text-slate-300">→</span>
         </Link>
 
+        {/* 歌曲：耳蟲效應是免費的重複——一個詞要 10-20 次遭遇才習得，
+            一首喜歡的歌一週就給你 50 次。另外連音縮讀與節奏也只有歌教得了 */}
+        {hasTaskLanguage && (
+          <Link
+            to="/song"
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">🎵</span>
+              <span className="text-left">
+                <span className="block font-bold">歌曲</span>
+                <span className="block text-sm text-slate-500">
+                  AI 挑歌・分段學・每句標「能不能拿去用」
+                </span>
+              </span>
+            </span>
+            <span className="text-slate-300">→</span>
+          </Link>
+        )}
+
         {/* 泛聽跟每日任務的精聽是兩件事：精聽建立準確度，泛聽建立自動化與語感。
             每日任務一週只有約 1,500 字的輸入，靠那個量習得不了東西 */}
         {hasTaskLanguage && (
