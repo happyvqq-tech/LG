@@ -23,6 +23,7 @@ import {
 } from '../lib/songService'
 import { LYRICS_MIN_CHARS, type SongSuggestion } from '../lib/prompts/song'
 import { ClaudeError } from '../lib/claude'
+import ErrorNote from '../components/ErrorNote'
 import { isTaskLanguage, type Song, type TaskLanguage } from '../lib/types'
 
 /** 1-5 分畫成五個點，比數字好掃 */
@@ -51,7 +52,9 @@ export default function SongHome() {
   const learnable = useMemo(() => (profile?.languages ?? []).filter(isTaskLanguage), [profile])
   const [language, setLanguage] = useState<TaskLanguage>(learnable[0] ?? '英文')
   const [songs, setSongs] = useState<Song[] | null>(null)
-  const [errorMsg, setErrorMsg] = useState('')
+  /** 存原始錯誤物件而不是字串：ClaudeError 的狀態碼與上游訊息在 message 裡，
+   *  轉成字串就只剩那句籠統的白話，之後要查問題無從查起 */
+  const [errorMsg, setErrorMsg] = useState<unknown>('')
 
   const [suggestions, setSuggestions] = useState<SongSuggestion[] | null>(null)
   const [suggesting, setSuggesting] = useState(false)
@@ -124,7 +127,7 @@ export default function SongHome() {
       )
       setSuggestions(list)
     } catch (e: unknown) {
-      setErrorMsg(e instanceof ClaudeError ? e.friendlyMessage : `推薦失敗：${String((e as Error).message)}`)
+      setErrorMsg(e instanceof ClaudeError ? e : `推薦失敗：${String((e as Error).message)}`)
     } finally {
       setSuggesting(false)
     }
@@ -156,7 +159,7 @@ export default function SongHome() {
       )
       navigate(`/song/${song.id}`)
     } catch (e: unknown) {
-      setErrorMsg(e instanceof ClaudeError ? e.friendlyMessage : `生成教材失敗：${String((e as Error).message)}`)
+      setErrorMsg(e instanceof ClaudeError ? e : `生成教材失敗：${String((e as Error).message)}`)
     } finally {
       setBuilding(false)
     }
@@ -278,7 +281,7 @@ export default function SongHome() {
           </div>
         )}
 
-        {errorMsg && <p className="mt-3 rounded-xl bg-red-50 p-3 text-red-600">{errorMsg}</p>}
+        {errorMsg ? <ErrorNote error={errorMsg} className="mt-3" /> : null}
 
         <button
           onClick={() => void build()}
@@ -323,7 +326,7 @@ export default function SongHome() {
         </div>
       )}
 
-      {errorMsg && <p className="mt-4 rounded-xl bg-red-50 p-4 text-red-600">{errorMsg}</p>}
+      {errorMsg ? <ErrorNote error={errorMsg} className="mt-4" /> : null}
 
       {songs && songs.length > 0 && (
         <section className="mt-5 grid gap-3">
