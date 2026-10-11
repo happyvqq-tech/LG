@@ -26,6 +26,8 @@ import { particleTutorSystemPrompt, type ParticleQuizInput } from './particleTut
 import { quizGeneratorSystemPrompt, type QuizGenInput } from './quizGenerator'
 import { readingAidSystemPrompt, type ReadingAidInput } from './readingAid'
 import { reviewPracticeSystemPrompt, type ReviewPracticeInput } from './reviewPractice'
+import { songLessonSystemPrompt, type SongLessonInput } from './songLesson'
+import { songPickerSystemPrompt, type SongPickerInput } from './songPicker'
 import { taigiScriptSystemPrompt, type TaigiScriptInput } from './taigiScript'
 import { taskGeneratorSystemPrompt, type TaskGeneratorInput } from './taskGenerator'
 import { translateSystemPrompt, type TranslateInput } from './translate'
@@ -53,6 +55,8 @@ export type PromptModule =
   | 'reviewPractice'
   | 'classicalAnnotate'
   | 'classicalTranslationGrade'
+  | 'songPicker'
+  | 'songLesson'
 
 interface PromptSpec {
   model: string
@@ -153,6 +157,19 @@ const REGISTRY: Record<PromptModule, PromptSpec> = {
     model: SONNET,
     maxTokens: 3000,
     build: (v) => translationGraderSystemPrompt(as<TranslationGradeInput>(v)),
+  },
+  // 選歌要真的知道哪些歌存在、哪些紅——Haiku 杜撰歌名的機率明顯高很多
+  songPicker: {
+    model: SONNET,
+    maxTokens: 2000,
+    build: (v) => songPickerSystemPrompt(as<SongPickerInput>(v)),
+  },
+  // 逐行判斷「這句能不能拿去用」是這個模組唯一的價值，判錯就整份教材失去意義；
+  // 而且輸出是每行四個欄位，token 上限要給得比其他模組寬
+  songLesson: {
+    model: SONNET,
+    maxTokens: 4000,
+    build: (v) => songLessonSystemPrompt(as<SongLessonInput>(v)),
   },
 }
 
