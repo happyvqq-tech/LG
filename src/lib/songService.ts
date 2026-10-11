@@ -15,7 +15,72 @@ import {
   type SongPickerInput,
   type SongSuggestion,
 } from './prompts/song'
+import { loadAccessPassphrase } from './accessGate'
 import type { Level, Song, TaskLanguage } from './types'
+
+/** 要跟 worker/src/index.ts 的 ACCESS_HEADER 一致（claude.ts、googleTts.ts 也是同一個） */
+const ACCESS_HEADER = 'x-lgl-access'
+
+function workerBase(): string | null {
+  const url = import.meta.env.VITE_WORKER_URL
+  return url ? url.replace(/\/$/, '') : null
+}
+
+async function postWorker<T>(path: string, body: unknown): Promise<T | null> {
+  const base = workerBase()
+  if (!base) return null
+  const passphrase = loadAccessPassphrase()
+  try {
+    const res = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(passphrase ? { [ACCESS_HEADER]: passphrase } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) return null
+    return (await res.json()) as T
+  } catch {
+    return null
+  }
+}
+
+export interface FetchedLyrics {
+  plain: string
+  /** LRC 格式的同步歌詞；查到的版本不一定有 */
+  synced: string
+  matchedTitle: string
+  matchedArtist: string
+}
+
+/**
+ * 自動查歌詞。查不到一律回 null，呼叫端改成請使用者自己貼——
+ * 社群歌詞庫不可能收錄所有歌，查不到是正常情況不是錯誤。
+ */
+export function fetchLyrics(track: string, artist: string): Promise<FetchedLyrics | null> {
+  return postWorker<FetchedLyrics>('/api/lyrics', { track, artist }).then((r) =>
+    r && (r.plain || r.synced) ? r : null,
+  )
+}
+
+/**
+ * 找原曲影片。沒設 YOUTUBE_API_KEY 的部署會回 null，
+ * 呼叫端改成請使用者貼一次連結。
+ */
+export function findVideo(track: string, artist: string): Promise<string | null> {
+  return postWorker<{ videoId?: string }>('/api/youtube', {
+    q: `${artist} ${track} official audio`,
+  }).then((r) => r?.videoId ?? null)
+}
+
+/** 從各種 YouTube 網址寫法裡挖出影片 ID；本來就是 ID 的話原樣回傳 */
+export function parseYouTubeId(input: string): string | null {
+  const s = input.trim()
+  if (/^[\w-]{11}$/.test(s)) return s
+  const m = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([\w-]{11})/)
+  return m ? m[1] : null
+}
 
 export async function listSongs(
   profileId: string,
@@ -76,6 +141,8 @@ export async function createSong(
   title: string,
   artist: string,
   rawLyrics: string,
+  synced?: string | null,
+  youtubeId?: string | null,
 ): Promise<Song> {
   const lyrics = tidyLyrics(rawLyrics)
 
@@ -98,12 +165,29 @@ export async function createSong(
       artist: artist.trim(),
       lyrics,
       lesson,
+      synced: synced || null,
+      youtube_id: youtubeId || null,
       segment_index: 0,
     })
     .select()
     .single()
-  if (error) throw new Error(error.message)
+  // 還沒跑 migration-014 的資料庫沒有那兩欄，整首歌不該因此存不進去——
+  // 拿掉再存一次，就只是少了分段播放，逐行教材照常可用
+  if (error) {
+    const retry = await supabase
+      .from('songs')
+      .insert({ profile_id: profileId, language, title: title.trim(), artist: artist.trim(), lyrics, lesson, segment_index: 0 })
+      .select()
+      .single()
+    if (retry.error) throw new Error(retry.error.message)
+    return retry.data as Song
+  }
   return data as Song
+}
+
+/** 補上原曲影片（使用者後來才貼連結）。失敗就算了，下次再貼 */
+export async function saveVideoId(id: string, youtubeId: string): Promise<void> {
+  await supabase.from('songs').update({ youtube_id: youtubeId }).eq('id', id)
 }
 
 /** 記住學到第幾段。失敗不該擋住學習流程——下次回來從頭看一遍而已 */

@@ -44,6 +44,34 @@ const REDUCTION_GUIDE: Record<TaskLanguage, string> = {
   韓文: '〜하고 있어→〜하고있어 的連讀、이것은→이건、그것이→그게、무엇을→뭘',
 }
 
+/**
+ * 唱歌會破壞什麼——這是歌曲教學最容易被忽略、代價也最大的一塊。
+ *
+ * 日文尤其嚴重：日文靠音高分辨詞義（雨 HL ／ 飴 LH），而唱歌時音高完全由旋律
+ * 決定。只靠歌學日文的人音高重音會全錯，那正是「文法很好、單字很多，
+ * 但一開口就聽得出是外國人」的主因，而且定型之後極難改。
+ *
+ * 英文是另一種：為了配合節拍，重音會被放到平常不重讀的音節上
+ * （beCAUSE 被唱成 BEcause），跟著唱久了講話的節奏就跑掉。
+ *
+ * 所以「說的版本」不是附屬品，是矯正器。
+ */
+const PROSODY_GUIDE: Record<TaskLanguage, string> = {
+  英文:
+    '英文是重音計時語言。歌曲為了對拍子，常把重音放在平常不重讀的音節或虛詞上。' +
+    '請挑出這段裡「唱起來的重音位置」跟「說起來的重音位置」明顯不同的句子，' +
+    'sung 寫旋律把重音放在哪（用大寫標出該音節，例如 BE-cause），' +
+    'spoken 寫正常說話時重音在哪（be-CAUSE）',
+  日文:
+    '日文是高低音調語言，音高會改變詞義（雨 HL ／ 飴 LH）。唱歌時音高由旋律決定，' +
+    '所以歌裡的音高幾乎一定跟說話時的アクセント不同——這是只靠歌學日文的人' +
+    '音高全錯的原因。請挑出這段裡含有「容易被旋律帶錯アクセント」的詞的句子，' +
+    'sung 寫旋律讓它聽起來像什麼音高，spoken 寫正常說話的高低（用 高／低 或 HL／LH 標示）',
+  韓文:
+    '韓文沒有音高重音，但有句末語調與長短音。歌曲常把語尾拉長或把疑問句唱成平敘。' +
+    '請挑出這段裡語調被旋律改變、照著唱會講錯語氣的句子',
+}
+
 export function songLessonSystemPrompt(input: SongLessonInput): string {
   return `你是語言教師，正在把一首歌做成${input.language}學習教材。
 
@@ -85,6 +113,10 @@ ${input.lyrics}
    常見的有：${REDUCTION_GUIDE[input.language]}
    written 寫完整形、sung 寫歌裡聽到的形、note 一句話說明
 8. summary 用一兩句話說這首歌在講什麼，讓學習者有脈絡再進去看句子
+9. **prosody：唱起來跟說起來不一樣的地方**，每段挑 1-3 句最值得提醒的（沒有就空陣列）。
+   ${PROSODY_GUIDE[input.language]}
+   這一項的用意是當矯正器：跟著唱會把錯的節奏／音高一起練進去，而且定型之後很難改。
+   只挑真的會造成問題的句子，不要每句都列——列太多等於沒有重點
 
 只輸出 JSON，不加任何前言、不用 markdown 圍欄：
 {
@@ -96,7 +128,8 @@ ${input.lyrics}
         {"text": "", "zh": "", "usable": true, "prose": "", "note": ""}
       ],
       "chunks": [{"text": "", "zh": "", "usage": ""}],
-      "reductions": [{"written": "", "sung": "", "note": ""}]
+      "reductions": [{"written": "", "sung": "", "note": ""}],
+      "prosody": [{"line": "", "sung": "", "spoken": "", "note": ""}]
     }
   ]
 }`

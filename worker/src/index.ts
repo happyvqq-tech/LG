@@ -17,6 +17,13 @@ export interface Env {
    * 沒設的話這道關卡整個不啟用，向下相容還沒設定過的部署。
    */
   ACCESS_PASSPHRASE?: string
+  /**
+   * YouTube Data API v3（歌曲模組用來找原曲影片）。選配——沒設的話前端會改成
+   * 請使用者自己貼一次 YouTube 連結，歌曲模組照常可用。
+   * 可以直接沿用 GCP 上那把 Google 金鑰，只要在金鑰的 API 限制裡
+   * 多勾一個 YouTube Data API v3 即可，不必另外開一把。
+   */
+  YOUTUBE_API_KEY?: string
 }
 
 interface ChatRequestBody {
@@ -54,6 +61,16 @@ const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const YATING_URL = 'https://tts.api.yating.tw/v2/speeches/short'
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize'
 const GOOGLE_VOICES_URL = 'https://texttospeech.googleapis.com/v1/voices'
+/**
+ * LRCLIB：社群維護的歌詞資料庫，免費且不需要金鑰，而且回傳的是
+ * 逐句帶時間戳的同步歌詞（LRC）——那比單純的歌詞值錢得多，
+ * 有時間戳才能「只循環播這一段」。
+ *
+ * 為什麼不用別家：Genius 的官方 API 根本不回傳歌詞（只有 metadata），
+ * Musixmatch 免費方案只給 30% 的歌詞。兩者都不適合。
+ */
+const LRCLIB_URL = 'https://lrclib.net/api'
+const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const RATE_LIMIT_PER_MINUTE = 20
 
 /**
@@ -86,7 +103,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 11
+const WORKER_VERSION = 12
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -482,6 +499,196 @@ async function handleGtts(request: Request, env: Env, origin: string): Promise<R
   })
 }
 
+/**
+ * 歌詞查詢：代理 LRCLIB。
+ *
+ * 為什麼要經過 Worker 而不讓前端直接打：一來可以用 Cloudflare Cache 把結果
+ * 快取起來（同一首歌全家只查一次），二來不確定 LRCLIB 的 CORS 標頭，
+ * 經過自己的 Worker 就不必賭。
+ *
+ * 查不到不是錯誤：社群資料庫本來就不可能收錄所有歌，前端會改成請使用者貼歌詞。
+ */
+async function handleLyrics(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+
+  let body: { track?: string; artist?: string }
+  try {
+    body = (await request.json()) as { track?: string; artist?: string }
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+
+  const track = (body.track ?? '').trim().slice(0, 120)
+  const artist = (body.artist ?? '').trim().slice(0, 120)
+  if (!track || !artist) {
+    return jsonResponse({ error: 'missing_query', message: '需要 track 與 artist' }, 400, origin)
+  }
+
+  const cache = caches.default
+  const cacheRequest = new Request(
+    `https://lyrics-cache.local/${fnv1a(`${artist}|${track}`)}-${track.length}`,
+    { method: 'GET' },
+  )
+  const cached = await cache.match(cacheRequest)
+  if (cached) {
+    return new Response(cached.body, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'x-lyrics-cache': 'hit', ...corsHeaders(origin) },
+    })
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'lyrics', 30)) {
+    return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  // LRCLIB 要求帶上可辨識的 User-Agent，這是它文件寫明的禮貌要求
+  const headers = { 'user-agent': 'LG-family-language-app (https://github.com/happyvqq-tech/LG)' }
+
+  async function lookup(path: string): Promise<unknown> {
+    const res = await fetch(`${LRCLIB_URL}${path}`, { headers })
+    if (!res.ok) return null
+    return (await res.json()) as unknown
+  }
+
+  let hit: Record<string, unknown> | null = null
+  try {
+    const q = `track_name=${encodeURIComponent(track)}&artist_name=${encodeURIComponent(artist)}`
+    // 先用精確比對；查不到再退回模糊搜尋取第一筆（歌名常有 - Remastered 之類的後綴）
+    const exact = (await lookup(`/get?${q}`)) as Record<string, unknown> | null
+    if (exact && typeof exact === 'object') hit = exact
+    if (!hit) {
+      const list = (await lookup(`/search?${q}`)) as unknown
+      if (Array.isArray(list) && list.length > 0) hit = list[0] as Record<string, unknown>
+    }
+  } catch {
+    return jsonResponse({ error: 'lyrics_unreachable', message: '無法連線到歌詞服務' }, 502, origin)
+  }
+
+  const plain = typeof hit?.plainLyrics === 'string' ? hit.plainLyrics : ''
+  const synced = typeof hit?.syncedLyrics === 'string' ? hit.syncedLyrics : ''
+  if (!plain && !synced) {
+    return jsonResponse(
+      { error: 'lyrics_not_found', message: '這首歌的歌詞查不到，請自己貼上' },
+      404,
+      origin,
+    )
+  }
+
+  const payload = JSON.stringify({
+    plain,
+    synced,
+    matchedTitle: typeof hit?.trackName === 'string' ? hit.trackName : track,
+    matchedArtist: typeof hit?.artistName === 'string' ? hit.artistName : artist,
+    source: 'LRCLIB',
+  })
+  const response = new Response(payload, {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=2592000' },
+  })
+  await cache.put(cacheRequest, response.clone())
+  return new Response(payload, {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
+  })
+}
+
+/**
+ * 找原曲的 YouTube 影片。選配功能：沒設 YOUTUBE_API_KEY 就回 501，
+ * 前端改成請使用者自己貼一次連結——歌曲模組照常可用，只是多一個動作。
+ *
+ * 不自己放音檔是版權考量：YouTube 官方嵌入是乾淨的做法（創作者照樣拿到收益）。
+ */
+async function handleYouTube(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+  if (!env.YOUTUBE_API_KEY) {
+    return jsonResponse(
+      { error: 'youtube_not_configured', message: '沒有設定 YOUTUBE_API_KEY' },
+      501,
+      origin,
+    )
+  }
+
+  let body: { q?: string }
+  try {
+    body = (await request.json()) as { q?: string }
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+
+  const q = (body.q ?? '').trim().slice(0, 150)
+  if (!q) return jsonResponse({ error: 'missing_query', message: '需要 q' }, 400, origin)
+
+  const cache = caches.default
+  const cacheRequest = new Request(`https://yt-cache.local/${fnv1a(q)}-${q.length}`, { method: 'GET' })
+  const cached = await cache.match(cacheRequest)
+  if (cached) {
+    return new Response(cached.body, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'x-yt-cache': 'hit', ...corsHeaders(origin) },
+    })
+  }
+
+  // YouTube 搜尋一次要 100 單位配額（每日免費 10,000），快取就是在省這個
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'yt', 10)) {
+    return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  let upstream: Response
+  try {
+    upstream = await fetch(
+      `${YOUTUBE_SEARCH_URL}?part=snippet&type=video&maxResults=1&videoEmbeddable=true` +
+        `&q=${encodeURIComponent(q)}&key=${encodeURIComponent(env.YOUTUBE_API_KEY)}`,
+    )
+  } catch {
+    return jsonResponse({ error: 'youtube_unreachable', message: '無法連線到 YouTube' }, 502, origin)
+  }
+
+  const raw = await upstream.text()
+  if (!upstream.ok) {
+    return jsonResponse(
+      {
+        error: 'youtube_failed',
+        status: upstream.status,
+        message:
+          upstream.status === 403
+            ? 'YouTube 拒絕這把金鑰，請確認已啟用 YouTube Data API v3 且配額未用完'
+            : `YouTube 回傳 ${upstream.status}`,
+        upstream: raw.slice(0, 300),
+      },
+      502,
+      origin,
+    )
+  }
+
+  let videoId = ''
+  let videoTitle = ''
+  try {
+    const parsed = JSON.parse(raw) as { items?: Array<{ id?: { videoId?: string }; snippet?: { title?: string } }> }
+    videoId = parsed.items?.[0]?.id?.videoId ?? ''
+    videoTitle = parsed.items?.[0]?.snippet?.title ?? ''
+  } catch {
+    // 解析不出來就當成找不到，下面會回 404
+  }
+  if (!videoId) {
+    return jsonResponse({ error: 'video_not_found', message: '找不到影片' }, 404, origin)
+  }
+
+  const payload = JSON.stringify({ videoId, videoTitle })
+  await cache.put(
+    cacheRequest,
+    new Response(payload, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=2592000' },
+    }),
+  )
+  return new Response(payload, {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
@@ -509,6 +716,10 @@ export default {
               : '（未設定，英日韓會使用瀏覽器內建語音）',
             // 通關密碼是選配的，沒設就代表任何人拿到網址都能直接用
             access_passphrase: env.ACCESS_PASSPHRASE ? '已設定（有通關密碼保護）' : '（未設定，任何人都能直接使用）',
+            // 歌曲模組找原曲影片用；沒設只是要自己貼一次 YouTube 連結
+            youtube_key: env.YOUTUBE_API_KEY
+              ? `已設定（${env.YOUTUBE_API_KEY.length} 字元）`
+              : '（未設定，歌曲模組會請你自己貼 YouTube 連結）',
           },
           null,
           2,
@@ -540,6 +751,14 @@ export default {
     // 為了一支唯讀端點去放寬 Access-Control-Allow-Methods 不划算
     if (url.pathname === '/api/gtts/voices' && request.method === 'POST') {
       return handleGoogleVoices(request, env, origin)
+    }
+
+    if (url.pathname === '/api/lyrics' && request.method === 'POST') {
+      return handleLyrics(request, env, origin)
+    }
+
+    if (url.pathname === '/api/youtube' && request.method === 'POST') {
+      return handleYouTube(request, env, origin)
     }
 
     // 前端在通關密碼輸入畫面用這支立即驗證對不對，不用等到真的送出一次

@@ -78,11 +78,20 @@ export interface SongReduction {
   note: string
 }
 
+/** 唱起來跟說起來不一樣的地方。唱歌會破壞英文重音與日文音高，這一項是矯正器 */
+export interface SongProsody {
+  line: string
+  sung: string
+  spoken: string
+  note: string
+}
+
 export interface SongSegment {
   label: string
   lines: SongLine[]
   chunks: Array<{ text: string; zh: string; usage: string }>
   reductions: SongReduction[]
+  prosody: SongProsody[]
 }
 
 export interface SongLesson {
@@ -114,6 +123,7 @@ function isSegment(v: unknown): v is SongSegment {
   if ((o.lines as unknown[]).length === 0) return false
   if (!Array.isArray(o.chunks)) o.chunks = []
   if (!Array.isArray(o.reductions)) o.reductions = []
+  if (!Array.isArray(o.prosody)) o.prosody = []
   return true
 }
 
