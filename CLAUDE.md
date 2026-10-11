@@ -64,6 +64,7 @@
 │   │                       # ExtensiveHome / ExtensivePlayer（泛聽：長而簡單，只聽不練）
 │   │                       # Progress（進步存摺：累積量、本期vs上期、成長曲線、練習足跡、里程碑）
 │   │                       # QuickSession（五分鐘模式：到期單字＋舊錯＋重聽，做完算連續天數）
+│   │                       # SongHome / SongStudy（歌曲：AI 選歌、使用者貼歌詞、逐行標可用性）
 │   ├── components/
 │   ├── lib/
 │   │   ├── claude.ts       # 呼叫 Worker 的統一封裝（含 JSON 解析與重試）
@@ -80,6 +81,7 @@
 │   │   ├── quickRules.ts   # 五分鐘模式的排卡與時間預算（純函式）
 │   │   ├── levelAdviceRules.ts # 難度升降建議：只建議不自動改（純函式）
 │   │   ├── scenarioPool.ts # 情境挑選，含 15% 的「意料之外」情境（純函式）
+│   │   ├── songService.ts  # 歌曲教材：推薦歌單、把貼上的歌詞做成課、分段進度
 │   │   ├── readingAidService.ts # 日文假名／韓文實際發音的按需標註與快取
 │   │   ├── ruby.ts         # [漢字|かな] 標記解析（純函式）
 │   │   └── prompts/        # 只剩「輸入介面 + 回應驗證函式」；
@@ -98,11 +100,14 @@
 | 批改回饋器 | `claude-sonnet-4-6` | 寫作批改、錯誤分類、文法微課、快練出題 | JSON |
 | 週報生成器 | `claude-sonnet-4-6` | 讀錯誤庫，生成避坑指南 | Markdown |
 | 台語腳本生成 | `claude-sonnet-4-6` | 生成台語腳本（漢字／台羅／華語三對照） | JSON |
+| 歌曲推薦 | `claude-sonnet-4-6` | 挑歌並分別評「知名度」與「學習適用度」；**禁止輸出歌詞** | JSON |
+| 歌曲教材 | `claude-sonnet-4-6` | 把使用者貼上的歌詞分段，逐行標「能不能拿去用」 | JSON |
 
 - API 端點：`POST https://api.anthropic.com/v1/messages`，headers：`x-api-key`、`anthropic-version: 2023-06-01`、`content-type: application/json`
 - 官方文件：https://docs.claude.com/en/api/overview
 - **凡要求 JSON 輸出的模組**：system prompt 必須明確要求「只輸出 JSON，不加任何前言與 markdown 圍欄」；前端 `claude.ts` 仍需做圍欄剝除與 try-catch 解析，解析失敗自動重試一次
-- max_tokens：對話 1024、任務生成 3000、批改 3000、週報 2000、台語腳本 3000
+- max_tokens：對話 1024、任務生成 3000、批改 3000、週報 2000、台語腳本 3000、歌曲推薦 2000、歌曲教材 4000（逐行四個欄位，上限要給得寬）
+- **歌詞一律由使用者貼上，絕不讓模型生成**：模型憑記憶背的歌詞會錯字漏行，而教錯的歌詞比不教更糟——學習者跟著原曲唱會對不上，又分不出是自己聽錯還是教材錯
 
 ## 6. Prompt 模組（完整內容）
 
@@ -220,6 +225,7 @@ prompt 設計，React 元件反而是通用零件。搬到 Worker 之後瀏覽�
 - `grammar_points`：id, language, name, level, description, in_rotation(bool)
 - `taiwanese_scripts`：id, title, lines(jsonb: 台文漢字/台羅/華語對照), notes(jsonb), level, topic, audio_urls(jsonb), created_at
 - `extensive_listens`：id, profile_id, language, title, script, topic, level, created_at（泛聽教材，migration-009）
+- `songs`：id, profile_id, language, title, artist, lyrics（使用者貼上）, lesson(jsonb), segment_index, created_at（歌曲教材，migration-013）
 
 錯誤狀態機：`active`（新錯誤）→ 連續 2 次「**有機會犯卻沒犯**」→ `pending_verify`（任務生成器刻意埋設情境）→ 驗證通過 → `resolved`。
 

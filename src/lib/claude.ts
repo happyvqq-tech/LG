@@ -75,6 +75,8 @@ export type PromptModule =
   | 'reviewPractice'
   | 'classicalAnnotate'
   | 'classicalTranslationGrade'
+  | 'songPicker'
+  | 'songLesson'
 
 export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse' | 'access_denied'
 
