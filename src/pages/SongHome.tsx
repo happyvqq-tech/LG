@@ -17,7 +17,7 @@ import {
   deleteSong,
   fetchLyrics,
   findVideo,
-  listSongs,
+  listAllSongs,
   parseYouTubeId,
   suggestSongs,
 } from '../lib/songService'
@@ -73,7 +73,7 @@ export default function SongHome() {
     let alive = true
     setSongs(null)
     setErrorMsg('')
-    listSongs(profile.id, language)
+    listAllSongs(profile.id)
       .then((list) => alive && setSongs(list))
       .catch((e: unknown) => {
         if (!alive) return
@@ -88,7 +88,11 @@ export default function SongHome() {
     return () => {
       alive = false
     }
-  }, [profile, language])
+  }, [profile])
+
+  /** 目前語言的歌，以及其他語言各有幾首（避免「教材不見了」的錯覺） */
+  const mine = useMemo(() => (songs ?? []).filter((s) => s.language === language), [songs, language])
+  const elsewhere = useMemo(() => (songs ?? []).length - mine.length, [songs, mine])
 
   /** 選了一首之後：同時去抓歌詞與原曲影片，兩邊都允許失敗 */
   async function openDraft(title: string, artist: string) {
@@ -123,7 +127,7 @@ export default function SongHome() {
         language,
         profile.level,
         profile.interests ?? null,
-        (songs ?? []).map((s) => s.title),
+        mine.map((s) => s.title),
       )
       setSuggestions(list)
     } catch (e: unknown) {
@@ -157,6 +161,7 @@ export default function SongHome() {
         synced,
         manual ?? videoId,
       )
+      setSongs((prev) => [song, ...(prev ?? [])])
       navigate(`/song/${song.id}`)
     } catch (e: unknown) {
       setErrorMsg(e instanceof ClaudeError ? e : `生成教材失敗：${String((e as Error).message)}`)
@@ -328,9 +333,14 @@ export default function SongHome() {
 
       {errorMsg ? <ErrorNote error={errorMsg} className="mt-4" /> : null}
 
-      {songs && songs.length > 0 && (
-        <section className="mt-5 grid gap-3">
-          {songs.map((s) => (
+      {songs && mine.length > 0 && (
+        <section className="mt-5">
+          <h2 className="px-1 font-bold text-slate-800">我的歌單（{mine.length}）</h2>
+          <p className="mt-0.5 px-1 text-xs text-slate-500">
+            做過的教材都留著，點進去可以接著上次的段落繼續練
+          </p>
+          <div className="mt-2 grid gap-3">
+          {mine.map((s) => (
             <div key={s.id} className="relative">
               <Link
                 to={`/song/${s.id}`}
@@ -348,10 +358,19 @@ export default function SongHome() {
               </button>
             </div>
           ))}
+          </div>
         </section>
       )}
 
-      {songs !== null && songs.length === 0 && !errorMsg && (
+      {/* 同時學兩種語言的人最容易踩的坑：剛做好的教材換個語言就看不到，
+          以為不見了。明講還有幾首在別的語言底下 */}
+      {songs !== null && elsewhere > 0 && (
+        <p className="mt-3 px-1 text-xs text-slate-500">
+          其他語言還有 {elsewhere} 首，切換上面的語言就看得到。
+        </p>
+      )}
+
+      {songs !== null && mine.length === 0 && elsewhere === 0 && !errorMsg && (
         <p className="mt-6 text-center text-sm text-slate-400">歌單還是空的，先讓我推薦幾首</p>
       )}
 
