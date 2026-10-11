@@ -164,11 +164,13 @@ const REGISTRY: Record<PromptModule, PromptSpec> = {
     maxTokens: 2000,
     build: (v) => songPickerSystemPrompt(as<SongPickerInput>(v)),
   },
-  // 逐行判斷「這句能不能拿去用」是這個模組唯一的價值，判錯就整份教材失去意義；
-  // 而且輸出是每行四個欄位，token 上限要給得比其他模組寬
+  // 逐行判斷「這句能不能拿去用」是這個模組唯一的價值，判錯就整份教材失去意義。
+  // 輸出是每行四個欄位，所以比其他模組寬一些；但也不能太寬——整份教材是一次
+  // 請求產出的，輸出逼近三千 token 時要跑快一分鐘，期間連線上毫無回應，
+  // 手機瀏覽器會直接斷線（實測就是這樣壞的）。段數上限在 prompt 裡一起收斂了
   songLesson: {
     model: SONNET,
-    maxTokens: 4000,
+    maxTokens: 2500,
     build: (v) => songLessonSystemPrompt(as<SongLessonInput>(v)),
   },
 }

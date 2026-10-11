@@ -135,7 +135,14 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
       }),
     })
   } catch {
-    throw new ClaudeError('network', '無法連線到 AI 服務，請檢查網路後重試')
+    // fetch 自己丟例外＝請求根本沒完成。除了真的斷網，最常見的是
+    // 「生成跑太久、連線被中斷」——期間畫面上什麼都沒有，使用者只會
+    // 以為是網路爛，而實際上換個穩定的網路重試一次通常就過了
+    throw new ClaudeError(
+      'network',
+      '無法連線到 AI 服務（fetch 失敗，請求沒有完成）',
+      '連不上 AI 服務。可能是網路不穩，也可能是這次生成跑太久被中斷——換 Wi-Fi 或重試一次通常就會過。',
+    )
   }
 
   if (res.status === 429) {
