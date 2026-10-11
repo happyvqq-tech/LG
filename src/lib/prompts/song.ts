@@ -138,8 +138,15 @@ export function isSongLesson(v: unknown): v is SongLesson {
 
 // ---------------- 貼上的歌詞 ----------------
 
-/** 一次最多處理的字數。整首超長的歌只取前面這麼多，避免 token 爆掉 */
-export const LYRICS_MAX_CHARS = 2500
+/**
+ * 一次最多處理的字數。
+ *
+ * 這個數字不是為了省 token，是為了**不要逾時**。整份教材是一次請求產出的，
+ * 而每一行都要四個欄位（原文／中譯／散文版／說明），行數一多輸出就逼近三千個
+ * token，Sonnet 要跑快一分鐘——期間連線上完全沒有回應，手機瀏覽器就直接斷線。
+ * 1200 字大約是一段主歌加一段副歌，對「一次學一段」來說本來就夠了。
+ */
+export const LYRICS_MAX_CHARS = 1200
 /** 少於這個長度多半是誤貼（複製到一半、貼到標題） */
 export const LYRICS_MIN_CHARS = 40
 
