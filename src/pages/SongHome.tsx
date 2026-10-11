@@ -1,4 +1,4 @@
-// 歌曲學習首頁：推薦歌單 → 貼歌詞 → 生成教材
+// 歌曲學習首頁：推薦歌單 → 自動抓歌詞 → 生成教材
 //
 // 為什麼歌曲值得獨立一條通道：它在三件事上無可取代——
 //   1. 耳蟲效應＝免費的重複。一個詞要 10-20 次遭遇才習得，一首喜歡的歌
@@ -6,12 +6,21 @@
 //   2. 連音與縮讀（gonna／〜てる）——聽力理解的第一殺手，課本幾乎不教
 //   3. 節奏：英文重音計時、日文拍計時，跟著唱會強迫產出正確節奏
 //
-// 但歌詞拿來學文法是災難（為押韻刪助詞、倒裝、用文語），所以教材裡
-// 每一行都會標「能不能拿去用」，見 SongStudy。
+// 歌詞由 LRCLIB 自動帶回來，但一定要讓使用者看過才生成——
+// 社群資料庫有時會對到別的版本（Live、Remix、翻唱），而歌詞是整份教材的
+// 唯一事實來源，錯了後面全錯。查不到時退回手動貼。
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useProfile } from '../lib/profileContext'
-import { createSong, deleteSong, listSongs, suggestSongs } from '../lib/songService'
+import {
+  createSong,
+  deleteSong,
+  fetchLyrics,
+  findVideo,
+  listSongs,
+  parseYouTubeId,
+  suggestSongs,
+} from '../lib/songService'
 import { LYRICS_MIN_CHARS, type SongSuggestion } from '../lib/prompts/song'
 import { ClaudeError } from '../lib/claude'
 import { isTaskLanguage, type Song, type TaskLanguage } from '../lib/types'
@@ -24,23 +33,22 @@ function Score({ label, value }: { label: string; value: number }) {
       {label}
       <span className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map((i) => (
-          <span
-            key={i}
-            className={`h-1.5 w-1.5 rounded-full ${i <= n ? 'bg-teal-600' : 'bg-slate-200'}`}
-          />
+          <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? 'bg-teal-600' : 'bg-slate-200'}`} />
         ))}
       </span>
     </span>
   )
 }
 
+interface Draft {
+  title: string
+  artist: string
+}
+
 export default function SongHome() {
   const navigate = useNavigate()
   const { profile } = useProfile()
-  const learnable = useMemo(
-    () => (profile?.languages ?? []).filter(isTaskLanguage),
-    [profile],
-  )
+  const learnable = useMemo(() => (profile?.languages ?? []).filter(isTaskLanguage), [profile])
   const [language, setLanguage] = useState<TaskLanguage>(learnable[0] ?? '英文')
   const [songs, setSongs] = useState<Song[] | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
@@ -48,9 +56,13 @@ export default function SongHome() {
   const [suggestions, setSuggestions] = useState<SongSuggestion[] | null>(null)
   const [suggesting, setSuggesting] = useState(false)
 
-  /** 正在貼歌詞的那一首（可能來自推薦，也可能是自己輸入的） */
-  const [draft, setDraft] = useState<{ title: string; artist: string } | null>(null)
+  const [draft, setDraft] = useState<Draft | null>(null)
   const [lyrics, setLyrics] = useState('')
+  const [synced, setSynced] = useState('')
+  const [videoId, setVideoId] = useState('')
+  const [videoInput, setVideoInput] = useState('')
+  /** 自動抓的結果：找到 / 找不到 / 還在找 */
+  const [autoState, setAutoState] = useState<'idle' | 'loading' | 'found' | 'missing'>('idle')
   const [building, setBuilding] = useState(false)
 
   useEffect(() => {
@@ -59,14 +71,11 @@ export default function SongHome() {
     setSongs(null)
     setErrorMsg('')
     listSongs(profile.id, language)
-      .then((list) => {
-        if (alive) setSongs(list)
-      })
+      .then((list) => alive && setSongs(list))
       .catch((e: unknown) => {
         if (!alive) return
         setSongs([])
         const msg = String((e as Error).message)
-        // 表還沒建就是還沒跑 migration-013，這個訊息要說得夠具體才修得動
         setErrorMsg(
           msg.includes('songs')
             ? '還沒有 songs 資料表。到 Supabase 的 SQL Editor 跑一次 supabase/migration-013.sql 就可以了。'
@@ -77,6 +86,30 @@ export default function SongHome() {
       alive = false
     }
   }, [profile, language])
+
+  /** 選了一首之後：同時去抓歌詞與原曲影片，兩邊都允許失敗 */
+  async function openDraft(title: string, artist: string) {
+    setDraft({ title, artist })
+    setLyrics('')
+    setSynced('')
+    setVideoId('')
+    setVideoInput('')
+    setErrorMsg('')
+    if (!title || !artist) {
+      setAutoState('idle')
+      return
+    }
+    setAutoState('loading')
+    const [found, vid] = await Promise.all([fetchLyrics(title, artist), findVideo(title, artist)])
+    if (found) {
+      setLyrics(found.plain || found.synced.replace(/\[[\d:.]+\]/g, '').trim())
+      setSynced(found.synced || '')
+      setAutoState('found')
+    } else {
+      setAutoState('missing')
+    }
+    if (vid) setVideoId(vid)
+  }
 
   async function recommend() {
     if (!profile || suggesting) return
@@ -104,12 +137,13 @@ export default function SongHome() {
       return
     }
     if (lyrics.trim().length < LYRICS_MIN_CHARS) {
-      setErrorMsg('歌詞看起來太短，是不是只複製到一部分？')
+      setErrorMsg('歌詞看起來太短，是不是只抓到一部分？可以直接在上面補齊')
       return
     }
     setBuilding(true)
     setErrorMsg('')
     try {
+      const manual = videoInput ? parseYouTubeId(videoInput) : null
       const song = await createSong(
         profile.id,
         language,
@@ -117,6 +151,8 @@ export default function SongHome() {
         draft.title,
         draft.artist,
         lyrics,
+        synced,
+        manual ?? videoId,
       )
       navigate(`/song/${song.id}`)
     } catch (e: unknown) {
@@ -134,16 +170,16 @@ export default function SongHome() {
 
   if (!profile) return null
 
-  // ── 貼歌詞的畫面 ──────────────────────────────────────
+  // ── 確認歌詞的畫面 ────────────────────────────────────
   if (draft) {
     return (
       <main className="mx-auto max-w-xl p-6 pb-16 lg:max-w-3xl">
         <header className="flex items-center justify-between pt-2">
-          <h1 className="text-xl font-bold">{draft.title ? draft.title : '加一首歌'}</h1>
+          <h1 className="text-xl font-bold">{draft.title || '加一首歌'}</h1>
           <button
             onClick={() => {
               setDraft(null)
-              setLyrics('')
+              setAutoState('idle')
               setErrorMsg('')
             }}
             className="shrink-0 rounded-full px-4 py-2 text-sm text-slate-500 active:bg-slate-100"
@@ -152,7 +188,6 @@ export default function SongHome() {
           </button>
         </header>
 
-        {/* 從推薦進來時已經填好了，但仍開放修改——推薦的歌名偶爾會差一個副標 */}
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-semibold text-slate-600" htmlFor="song-title">
@@ -180,28 +215,74 @@ export default function SongHome() {
           </div>
         </div>
 
-        <div className="mt-4 rounded-2xl bg-sky-50 p-4 text-sm leading-relaxed text-sky-900 ring-1 ring-sky-200/70">
-          把歌詞從你聽歌的地方複製過來貼在下面。
-          <span className="mt-1 block text-xs text-sky-800/80">
-            為什麼要你貼而不是我直接生成：AI 是憑記憶背歌詞的，再紅的歌也會有錯字或漏行。
-            跟著原曲唱卻對不上，你會分不出是自己聽錯還是教材錯——所以歌詞一律以你貼的為準，
-            我只負責分析與教學。
-          </span>
-        </div>
+        {autoState === 'idle' && draft.title && draft.artist && (
+          <button
+            onClick={() => void openDraft(draft.title, draft.artist)}
+            className="mt-3 w-full rounded-xl bg-white py-3 font-semibold text-teal-700 shadow-sm ring-1 ring-slate-200/60"
+          >
+            自動找歌詞
+          </button>
+        )}
+
+        {autoState === 'loading' && (
+          <p className="mt-4 rounded-xl bg-slate-100 p-4 text-center text-sm text-slate-500">
+            正在找歌詞與原曲…
+          </p>
+        )}
+
+        {autoState === 'found' && (
+          <div className="mt-4 rounded-xl bg-teal-50 p-4 text-sm leading-relaxed text-teal-900 ring-1 ring-teal-200/70">
+            已自動帶入歌詞{synced && '（含逐句時間，可以只循環播一段）'}。
+            <span className="mt-1 block text-xs text-teal-800/80">
+              請快速掃一眼對不對——歌詞庫偶爾會對到 Live 版或翻唱版。
+              歌詞是整份教材的唯一依據，錯了後面全錯，有問題直接在下面改。
+            </span>
+          </div>
+        )}
+
+        {autoState === 'missing' && (
+          <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/70">
+            查不到這首的歌詞，請自己從聽歌的地方複製貼上。
+            <span className="mt-1 block text-xs text-amber-800/80">
+              歌詞庫是社群維護的，冷門歌或太新的歌常常還沒收錄。
+            </span>
+          </div>
+        )}
 
         <textarea
           value={lyrics}
           onChange={(e) => setLyrics(e.target.value)}
           rows={12}
-          placeholder={'在這裡貼上歌詞…\n\n一行一句，有 [Verse 1] 這種標記也沒關係，會自動忽略'}
-          className="mt-4 w-full rounded-xl border border-slate-300 p-3 text-sm leading-relaxed"
+          placeholder={'歌詞會自動帶入，沒抓到的話貼在這裡…'}
+          className="mt-3 w-full rounded-xl border border-slate-300 p-3 text-sm leading-relaxed"
         />
+
+        {/* 原曲：自動找到就不必管，找不到才需要貼一次 */}
+        {videoId ? (
+          <p className="mt-3 text-sm text-slate-500">🎬 已找到原曲影片，學習時可以分段循環播放</p>
+        ) : (
+          <div className="mt-3">
+            <label className="block text-sm font-semibold text-slate-600" htmlFor="song-video">
+              原曲 YouTube 連結（選填）
+            </label>
+            <input
+              id="song-video"
+              value={videoInput}
+              onChange={(e) => setVideoInput(e.target.value)}
+              placeholder="https://youtu.be/…"
+              className="mt-1 w-full rounded-xl border border-slate-300 p-3 text-sm"
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              貼了才能一段一段循環播原曲。不貼也可以學，只是只有朗讀版的聲音。
+            </p>
+          </div>
+        )}
 
         {errorMsg && <p className="mt-3 rounded-xl bg-red-50 p-3 text-red-600">{errorMsg}</p>}
 
         <button
           onClick={() => void build()}
-          disabled={building}
+          disabled={building || autoState === 'loading'}
           className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white disabled:opacity-60"
         >
           {building ? '分析中，約需 20 秒…' : '做成教材'}
@@ -216,9 +297,7 @@ export default function SongHome() {
       <header className="flex items-center justify-between pt-2">
         <div>
           <h1 className="text-2xl font-bold">歌曲</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            跟著唱學節奏與連音・每句都會標「能不能拿去用」
-          </p>
+          <p className="mt-1 text-sm text-slate-500">跟著唱學節奏與連音・每句都會標「能不能拿去用」</p>
         </div>
         <Link to="/home" className="shrink-0 rounded-full px-4 py-2 text-sm text-slate-500 active:bg-slate-100">
           返回
@@ -246,7 +325,6 @@ export default function SongHome() {
 
       {errorMsg && <p className="mt-4 rounded-xl bg-red-50 p-4 text-red-600">{errorMsg}</p>}
 
-      {/* 我的歌單 */}
       {songs && songs.length > 0 && (
         <section className="mt-5 grid gap-3">
           {songs.map((s) => (
@@ -274,7 +352,6 @@ export default function SongHome() {
         <p className="mt-6 text-center text-sm text-slate-400">歌單還是空的，先讓我推薦幾首</p>
       )}
 
-      {/* 推薦 */}
       <section className="mt-6">
         <button
           onClick={() => void recommend()}
@@ -292,7 +369,10 @@ export default function SongHome() {
             </p>
             <div className="mt-3 grid gap-3">
               {suggestions.map((s) => (
-                <div key={`${s.title}-${s.artist}`} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+                <div
+                  key={`${s.title}-${s.artist}`}
+                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60"
+                >
                   <p className="font-bold">{s.title}</p>
                   <p className="text-sm text-slate-500">
                     {s.artist}
@@ -305,11 +385,7 @@ export default function SongHome() {
                   <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.why}</p>
                   <p className="mt-1.5 text-sm leading-relaxed text-amber-700">⚠️ {s.caution}</p>
                   <button
-                    onClick={() => {
-                      setDraft({ title: s.title, artist: s.artist })
-                      setLyrics('')
-                      setErrorMsg('')
-                    }}
+                    onClick={() => void openDraft(s.title, s.artist)}
                     className="mt-3 w-full rounded-xl bg-teal-50 py-3 font-bold text-teal-700"
                   >
                     學這首
@@ -320,13 +396,8 @@ export default function SongHome() {
           </>
         )}
 
-        {/* 自己有想學的歌就不必等推薦 */}
         <button
-          onClick={() => {
-            setDraft({ title: '', artist: '' })
-            setLyrics('')
-            setErrorMsg('')
-          }}
+          onClick={() => void openDraft('', '')}
           className="mt-3 w-full rounded-xl bg-white py-3 font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200/60"
         >
           我自己有想學的歌

@@ -306,6 +306,10 @@ export interface Song {
   lyrics: string
   /** songLesson 的輸出，型別見 lib/prompts/song.ts 的 SongLesson */
   lesson: unknown
+  /** LRC 格式的同步歌詞原文（migration-014）；沒有就沒有分段播放 */
+  synced?: string | null
+  /** 原曲的 YouTube 影片 ID（migration-014）。只存 ID，不代管任何音檔 */
+  youtube_id?: string | null
   /** 學到第幾段（0-based） */
   segment_index: number
   created_at: string
