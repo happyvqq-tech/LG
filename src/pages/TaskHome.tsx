@@ -12,6 +12,7 @@ import { getWordsForTask } from '../lib/vocabService'
 import Avatar from '../components/Avatar'
 import TodayDashboard from '../components/TodayDashboard'
 import LevelAdvice from '../components/LevelAdvice'
+import ErrorNote from '../components/ErrorNote'
 import AppVersion from '../components/AppVersion'
 import { TAIGI_ENABLED } from '../lib/features'
 import { isTaskLanguage, LEVEL_INFO, WEEKDAY_LABELS, type ErrorRecord, type GrammarPoint, type Language, type Task, type TaskJson, type TaskLanguage } from '../lib/types'
@@ -36,7 +37,9 @@ export default function TaskHome() {
   const [task, setTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
+  /** 存原始錯誤物件：ClaudeError 的狀態碼與上游訊息在 message 裡，
+   *  轉成字串就只剩籠統的白話，真的壞掉時無從查起 */
+  const [errorMsg, setErrorMsg] = useState<unknown>('')
   const [showErrorBank, setShowErrorBank] = useState(false)
 
   // 進頁面時同步一次成員資料（其他裝置改過名稱/照片/計畫時跟上）
@@ -138,8 +141,7 @@ export default function TaskHome() {
       const saved = await createTask(profile.id, language as Language, taskJson)
       setTask(saved)
     } catch (e: unknown) {
-      const msg = e instanceof ClaudeError ? e.friendlyMessage : `任務生成失敗：${String((e as Error).message)}`
-      setErrorMsg(msg)
+      setErrorMsg(e instanceof ClaudeError ? e : `任務生成失敗：${String((e as Error).message)}`)
     } finally {
       setGenerating(false)
     }
@@ -266,18 +268,18 @@ export default function TaskHome() {
           </div>
         )}
 
-        {errorMsg && (
-          <div className="mt-3 rounded-xl bg-red-50 p-4 text-red-600">
-            {errorMsg}
+        {errorMsg ? (
+          <div className="mt-3">
+            <ErrorNote error={errorMsg} />
             <button
               onClick={() => void generate()}
               disabled={generating}
-              className="mt-3 block w-full rounded-lg bg-red-600 px-4 py-2 font-semibold text-white disabled:opacity-60"
+              className="mt-2 block w-full rounded-lg bg-red-600 px-4 py-2 font-semibold text-white disabled:opacity-60"
             >
               重試
             </button>
           </div>
-        )}
+        ) : null}
       </section>
       )}
 
