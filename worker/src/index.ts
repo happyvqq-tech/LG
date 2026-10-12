@@ -4,6 +4,7 @@
  */
 
 import { isPromptModule, resolvePrompt } from './prompts'
+import { extractArticle } from './articleExtract'
 import {
   extractCaptionTracks,
   json3ToPanelText,
@@ -111,7 +112,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 17
+const WORKER_VERSION = 18
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -822,6 +823,126 @@ async function handleTranscript(request: Request, env: Env, origin: string): Pro
   })
 }
 
+// ─────────────────────────────────────────────────────────────
+// 文章抓取：把一個網址變成可讀的本文
+//
+// 跟 /api/transcript 不同，這條路的命中率應該高得多——新聞網站不像
+// YouTube 會擋機房 IP。抓不到的典型原因是付費牆與整頁靠 JS 才渲染，
+// 兩種都會抽出一篇很短的東西，所以用長度當判準，然後退回請使用者貼。
+//
+// 抓回來的東西會先給使用者看過才生成教材（跟歌詞、逐字稿同一條規矩）。
+// ─────────────────────────────────────────────────────────────
+
+/** 只放行公開網站。擋掉內網與非 http(s)，不要讓這支變成打內部服務的跳板 */
+function isFetchableUrl(raw: string): URL | null {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+
+  const host = url.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) return null
+  // IPv4 私有位址與 loopback；IPv6 一律擋（公開新聞網站不會只有 IPv6 字面位址）
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    const [a, b] = host.split('.').map(Number)
+    if (a === 10 || a === 127 || a === 0 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31)) {
+      return null
+    }
+    if (a === 169 && b === 254) return null // 雲端的 metadata 端點都在這段
+  }
+  if (host.includes(':')) return null
+
+  return url
+}
+
+/** 一次最多讀多少 HTML。新聞頁 200KB 綽綽有餘，再大多半是塞滿廣告的入口頁 */
+const ARTICLE_HTML_LIMIT = 600_000
+
+async function handleArticle(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+
+  let body: { url?: string }
+  try {
+    body = (await request.json()) as { url?: string }
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+
+  const target = isFetchableUrl((body.url ?? '').trim())
+  if (!target) {
+    return jsonResponse({ error: 'bad_url', reason: 'bad_url' }, 400, origin)
+  }
+
+  const cache = caches.default
+  const cacheRequest = new Request(`https://article-cache.local/${fnv1a(target.href)}-${target.href.length}`, {
+    method: 'GET',
+  })
+  const cached = await cache.match(cacheRequest)
+  if (cached) {
+    return new Response(cached.body, {
+      status: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'x-article-cache': 'hit',
+        ...corsHeaders(origin),
+      },
+    })
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'article', 20)) {
+    return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  let html: string
+  try {
+    const res = await fetch(target.href, {
+      headers: {
+        'user-agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        accept: 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    })
+    if (!res.ok) {
+      return jsonResponse(
+        { error: 'article_failed', reason: res.status === 403 || res.status === 401 ? 'blocked' : 'failed' },
+        404,
+        origin,
+      )
+    }
+    const type = res.headers.get('content-type') ?? ''
+    if (!type.includes('html')) {
+      return jsonResponse({ error: 'article_failed', reason: 'not_html' }, 404, origin)
+    }
+    html = (await res.text()).slice(0, ARTICLE_HTML_LIMIT)
+  } catch {
+    return jsonResponse({ error: 'article_failed', reason: 'unreachable' }, 502, origin)
+  }
+
+  const { title, text } = extractArticle(html)
+  // 太短＝多半是付費牆，或整頁要跑 JS 才有內容。這兩種都救不了，直接說實話
+  if (text.length < 200) {
+    return jsonResponse({ error: 'article_failed', reason: 'too_short', title }, 404, origin)
+  }
+
+  const payload = JSON.stringify({ title, text: text.slice(0, 20000) })
+  await cache.put(
+    cacheRequest,
+    new Response(payload, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=604800' },
+    }),
+  )
+  return new Response(payload, {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
@@ -896,6 +1017,10 @@ export default {
 
     if (url.pathname === '/api/transcript' && request.method === 'POST') {
       return handleTranscript(request, env, origin)
+    }
+
+    if (url.pathname === '/api/article' && request.method === 'POST') {
+      return handleArticle(request, env, origin)
     }
 
     // 前端在通關密碼輸入畫面用這支立即驗證對不對，不用等到真的送出一次

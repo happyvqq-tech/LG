@@ -331,6 +331,24 @@ export interface Video {
   created_at: string
 }
 
+/** 文章教材（對應 articles 表，migration-016）
+ *  原文是使用者貼上或 Worker 依網址抓回來的真實文本——AI 只做分析，
+ *  不重打也不改寫（理由同歌詞與逐字稿，見 worker/src/prompts/articleLesson.ts）。
+ *  存的是這個家庭自己的一份副本，不對外提供、不散布（見 LICENSE）。 */
+export interface Article {
+  id: string
+  profile_id: string
+  language: Language
+  title: string
+  /** 來源網址；使用者直接貼文字時為 null */
+  source_url: string | null
+  /** 原文（已截到 ARTICLE_MAX_CHARS，跟送進 prompt 的是同一份） */
+  body: string
+  /** articleLesson 的輸出，型別見 lib/prompts/article.ts 的 ArticleLesson */
+  lesson: unknown
+  created_at: string
+}
+
 export interface TaiwaneseScriptLine {
   hanji: string
   tailo: string

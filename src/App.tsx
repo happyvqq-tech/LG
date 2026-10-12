@@ -11,6 +11,8 @@ import SongHome from './pages/SongHome'
 import SongStudy from './pages/SongStudy'
 import VideoHome from './pages/VideoHome'
 import VideoStudy from './pages/VideoStudy'
+import ArticleHome from './pages/ArticleHome'
+import ArticleStudy from './pages/ArticleStudy'
 import TaskReview from './pages/TaskReview'
 import BackTranslate from './pages/BackTranslate'
 import Listening from './pages/Listening'
@@ -57,6 +59,8 @@ export default function App() {
         <Route path="/song/:songId" element={guarded(<SongStudy />)} />
         <Route path="/video" element={guarded(<VideoHome />)} />
         <Route path="/video/:videoId" element={guarded(<VideoStudy />)} />
+        <Route path="/article" element={guarded(<ArticleHome />)} />
+        <Route path="/article/:articleId" element={guarded(<ArticleStudy />)} />
         <Route path="/archive" element={guarded(<TaskArchive />)} />
         <Route path="/archive/:taskId" element={guarded(<TaskReview />)} />
         <Route path="/archive/:taskId/back-translate" element={guarded(<BackTranslate />)} />

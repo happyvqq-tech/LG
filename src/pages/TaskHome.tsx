@@ -374,6 +374,27 @@ export default function TaskHome() {
           </Link>
         )}
 
+        {/* 文章：每日任務的聽力稿是為你生成的，那是它的價值，但也意味著它
+            永遠是「為教學而寫」的。真實文章會出現教材不會出現的東西——
+            三層子句、定指回指、書面語詞彙，那才是讀不動長文的真正原因 */}
+        {hasTaskLanguage && (
+          <Link
+            to="/article"
+            className="flex w-full items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">📄</span>
+              <span className="text-left">
+                <span className="block font-bold">文章</span>
+                <span className="block text-sm text-slate-500">
+                  真實文本・長句解剖・書面轉口語
+                </span>
+              </span>
+            </span>
+            <span className="text-slate-300">→</span>
+          </Link>
+        )}
+
         {/* 泛聽跟每日任務的精聽是兩件事：精聽建立準確度，泛聽建立自動化與語感。
             每日任務一週只有約 1,500 字的輸入，靠那個量習得不了東西 */}
         {hasTaskLanguage && (
