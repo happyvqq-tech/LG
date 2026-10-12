@@ -4,6 +4,13 @@
  */
 
 import { isPromptModule, resolvePrompt } from './prompts'
+import {
+  extractCaptionTracks,
+  json3ToPanelText,
+  LANG_CODE,
+  pickTrack,
+  type TranscriptMiss,
+} from './youtubeCaptions'
 
 export interface Env {
   ANTHROPIC_API_KEY: string
@@ -71,6 +78,7 @@ const GOOGLE_VOICES_URL = 'https://texttospeech.googleapis.com/v1/voices'
  */
 const LRCLIB_URL = 'https://lrclib.net/api'
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
+const YOUTUBE_WATCH_URL = 'https://www.youtube.com/watch'
 const RATE_LIMIT_PER_MINUTE = 20
 
 /**
@@ -103,7 +111,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 15
+const WORKER_VERSION = 16
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -689,6 +697,131 @@ async function handleYouTube(request: Request, env: Env, origin: string): Promis
   })
 }
 
+// ─────────────────────────────────────────────────────────────
+// 影片逐字稿：盡力試抓一次
+//
+// 先說清楚期望值：**這支常常會失敗，而且那是正常的。**
+// YouTube 這兩年鎖了兩道關，兩道都不是我們繞得過的：
+//
+//   1. PO token——字幕網址帶 exp=xpe 的影片，不附上播放器簽出來的 token
+//      就只會回 200 加空內容。那個 token 是 BotGuard 挑戰算出來的，
+//      沒有公開做法可以在 Worker 裡產生
+//   2. 機房 IP——AWS／GCP／Cloudflare 的 IP 段會收到「Sign in to confirm
+//      you're not a bot」。Worker 正好就是機房 IP。社群的解法是住宅代理，那要錢
+//
+// 那為什麼還要做？因為**失敗的成本是零**：抓不到就安靜退回「請貼上」，
+// 跟沒有這支一模一樣；抓得到就省一次手動複製。不在 PO token 名單內的
+// 舊影片還是有機會過。
+//
+// 官方 API 不是選項：captions.download 只有影片擁有者能呼叫。
+// 前端自己抓也不是選項：youtube.com 不回 CORS 標頭，瀏覽器在你讀到
+// 內容之前就把回應丟掉了（所以才另外給書籤小工具——那個是在 YouTube
+// 自己的頁面上跑，讀的是播放器已經渲染好的轉錄稿面板，沒有這些問題）。
+// ─────────────────────────────────────────────────────────────
+
+async function handleTranscript(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+
+  let body: { videoId?: string; language?: string }
+  try {
+    body = (await request.json()) as { videoId?: string; language?: string }
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+
+  const videoId = (body.videoId ?? '').trim()
+  if (!/^[\w-]{11}$/.test(videoId)) {
+    return jsonResponse({ error: 'missing_query', message: '需要 11 碼的 videoId' }, 400, origin)
+  }
+  const wanted = LANG_CODE[body.language ?? ''] ?? ''
+
+  const cache = caches.default
+  const cacheRequest = new Request(`https://yt-transcript.local/${videoId}-${wanted || 'any'}`, {
+    method: 'GET',
+  })
+  const cached = await cache.match(cacheRequest)
+  if (cached) {
+    return new Response(cached.body, {
+      status: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'x-transcript-cache': 'hit',
+        ...corsHeaders(origin),
+      },
+    })
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'transcript', 20)) {
+    return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  function miss(reason: TranscriptMiss, status = 404): Response {
+    // 刻意不快取失敗：擋 IP 跟 PO token 都可能是一時的，
+    // 快取起來等於把一次壞運氣變成一個月都抓不到
+    return jsonResponse({ error: 'transcript_not_found', reason }, status, origin)
+  }
+
+  const browserish = {
+    'user-agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'accept-language': 'en-US,en;q=0.9',
+  }
+
+  let html: string
+  try {
+    // bpctr 與 has_verified 是為了跳過年齡／同意的中介頁
+    const res = await fetch(
+      `${YOUTUBE_WATCH_URL}?v=${encodeURIComponent(videoId)}&hl=en&bpctr=9999999999&has_verified=1`,
+      { headers: browserish },
+    )
+    if (!res.ok) return miss('blocked', 502)
+    html = await res.text()
+  } catch {
+    return miss('unreachable', 502)
+  }
+
+  if (html.includes('Sign in to confirm') || html.includes('consent.youtube.com')) {
+    return miss('blocked', 502)
+  }
+
+  const track = pickTrack(extractCaptionTracks(html), wanted)
+  if (!track?.baseUrl) return miss('no_captions')
+
+  // exp=xpe 就是 PO token 名單的標記，抓了也只會拿到空的，省一次請求
+  if (track.baseUrl.includes('exp=xpe')) return miss('po_token')
+
+  let raw: string
+  try {
+    const res = await fetch(`${track.baseUrl}&fmt=json3`, { headers: browserish })
+    if (!res.ok) return miss('blocked', 502)
+    raw = await res.text()
+  } catch {
+    return miss('unreachable', 502)
+  }
+  if (!raw.trim()) return miss('po_token')
+
+  const text = json3ToPanelText(raw).slice(0, 20000)
+  if (!text) return miss('empty')
+
+  const payload = JSON.stringify({
+    text,
+    lang: track.languageCode ?? '',
+    auto: track.kind === 'asr',
+  })
+  await cache.put(
+    cacheRequest,
+    new Response(payload, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=2592000' },
+    }),
+  )
+  return new Response(payload, {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
@@ -759,6 +892,10 @@ export default {
 
     if (url.pathname === '/api/youtube' && request.method === 'POST') {
       return handleYouTube(request, env, origin)
+    }
+
+    if (url.pathname === '/api/transcript' && request.method === 'POST') {
+      return handleTranscript(request, env, origin)
     }
 
     // 前端在通關密碼輸入畫面用這支立即驗證對不對，不用等到真的送出一次
