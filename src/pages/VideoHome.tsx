@@ -11,11 +11,21 @@
 // 逐字稿也沒有 LRCLIB 那種免費來源（captions.download 只有影片擁有者能用），
 // 一律從 YouTube 自己的「顯示轉錄稿」面板複製貼上。
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useProfile } from '../lib/profileContext'
-import { createVideo, deleteVideo, listVideos, resolvePicks, suggestSearches } from '../lib/videoService'
+import {
+  createVideo,
+  deleteVideo,
+  fetchTranscript,
+  listVideos,
+  resolvePicks,
+  suggestSearches,
+  TRANSCRIPT_MISS_NOTE,
+  type FetchedTranscript,
+  type TranscriptMiss,
+} from '../lib/videoService'
 import { parseYouTubeId } from '../lib/songService'
-import { TRANSCRIPT_MIN_CHARS, type VideoPick } from '../lib/prompts/video'
+import { TRANSCRIPT_MAX_CHARS, TRANSCRIPT_MIN_CHARS, type VideoPick } from '../lib/prompts/video'
 import type { ResolvedPick } from '../lib/videoService'
 import { ClaudeError } from '../lib/claude'
 import ErrorNote from '../components/ErrorNote'
@@ -23,6 +33,54 @@ import { isTaskLanguage, type TaskLanguage, type Video } from '../lib/types'
 
 /** 幾個起步用的主題，省掉「要填什麼」的猶豫 */
 const TOPIC_HINTS = ['日常生活', '旅遊', '料理', '工作與職場', '科技', '健康運動']
+
+/**
+ * 一鍵抓逐字稿的書籤小工具。
+ *
+ * 為什麼這個做得到而伺服器做不到：它是在 YouTube 自己的頁面上跑的，
+ * 讀的是播放器**已經渲染好**的轉錄稿面板。簽章那關播放器早就過了，
+ * 也沒有跨來源的問題。這是唯一 100% 可靠的自動化方式。
+ */
+const BOOKMARKLET = `javascript:(function(){var s=document.querySelectorAll('ytd-transcript-segment-renderer');if(!s.length){alert('請先點影片簡介下方的「顯示轉錄稿」，等逐字稿出現後再按一次');return;}var t=[];s.forEach(function(e){var a=e.querySelector('.segment-timestamp'),b=e.querySelector('.segment-text');if(b){t.push(((a&&a.textContent.trim())||'')+'\\n'+b.textContent.trim());}});var v=new URL(location.href).searchParams.get('v')||'';var n=document.title.replace(/ - YouTube$/,'');window.open('${window.location.origin}${import.meta.env.BASE_URL}#/video?v='+encodeURIComponent(v)+'&n='+encodeURIComponent(n)+'&t='+encodeURIComponent(t.join('\\n').slice(0,4000)),'_blank');})()`
+
+/** 書籤小工具的安裝說明與複製按鈕 */
+function TranscriptTool() {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(BOOKMARKLET)
+      setCopied(true)
+    } catch {
+      // 不給剪貼簿權限的瀏覽器就讓他自己選下面那塊文字
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-xl bg-slate-50 p-3">
+      <p className="text-xs leading-relaxed text-slate-600">
+        這段小程式在 YouTube 頁面上跑，直接讀播放器已經做好的轉錄稿面板，
+        抓完自動帶回這裡。伺服器抓不到的影片它也抓得到。
+      </p>
+      <button
+        onClick={() => void copy()}
+        className="mt-2 w-full rounded-lg bg-teal-600 py-2.5 text-sm font-bold text-white"
+      >
+        {copied ? '已複製，照下面步驟貼成書籤' : '複製小工具程式碼'}
+      </button>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-slate-600">
+        <li>隨便加一個書籤（名字取「抓逐字稿」）</li>
+        <li>編輯那個書籤，把網址整個換成剛剛複製的那段</li>
+        <li>之後在 YouTube 點「顯示轉錄稿」，再點這個書籤就好</li>
+      </ol>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">
+        iPhone：Safari 的書籤可以這樣編輯，手機版 YouTube 要先切到「電腦版網站」。
+        Android Chrome：在網址列打書籤名稱就能執行。
+      </p>
+    </div>
+  )
+}
 
 /** 一個搜尋方向。搜到真實影片就直接開工，搜不到就給 YouTube 搜尋連結讓使用者自己挑 */
 export function PickCard({ pick, onPick }: { pick: ResolvedPick; onPick: () => void }) {
@@ -83,6 +141,7 @@ interface Draft {
 
 export default function VideoHome() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { profile } = useProfile()
   const learnable = useMemo(() => (profile?.languages ?? []).filter(isTaskLanguage), [profile])
   const [language, setLanguage] = useState<TaskLanguage>(learnable[0] ?? '英文')
@@ -98,6 +157,10 @@ export default function VideoHome() {
   const [linkInput, setLinkInput] = useState('')
   const [transcript, setTranscript] = useState('')
   const [building, setBuilding] = useState(false)
+  /** 自動試抓的結果：還沒試是 null，抓到是逐字稿，抓不到帶原因 */
+  const [fetched, setFetched] = useState<FetchedTranscript | { miss: TranscriptMiss } | null>(null)
+  const [fetching, setFetching] = useState(false)
+  const [showTool, setShowTool] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -120,6 +183,21 @@ export default function VideoHome() {
       alive = false
     }
   }, [profile])
+
+  /** 書籤小工具抓完會開 #/video?v=…&n=…&t=…，直接把草稿填好 */
+  useEffect(() => {
+    const t = searchParams.get('t')
+    if (!t) return
+    setDraft({
+      title: searchParams.get('n') ?? '',
+      videoId: parseYouTubeId(searchParams.get('v') ?? '') ?? '',
+      pick: null,
+    })
+    setTranscript(t)
+    setFetched(null)
+    // 把參數清掉：不然重新整理會再帶一次，而且網址長得嚇人
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const mine = useMemo(() => (videos ?? []).filter((v) => v.language === language), [videos, language])
   const elsewhere = useMemo(() => (videos ?? []).length - mine.length, [videos, mine])
@@ -150,7 +228,23 @@ export default function VideoHome() {
     setDraft({ title, videoId, pick })
     setLinkInput('')
     setTranscript('')
+    setFetched(null)
     setErrorMsg('')
+    if (videoId) void autoFetch(videoId)
+  }
+
+  /**
+   * 盡力試抓一次逐字稿。抓不到是常態（YouTube 擋機房 IP、字幕要播放器簽章），
+   * 所以這裡不會把它當成錯誤——只是把原因講清楚，然後讓使用者走貼上那條路。
+   */
+  async function autoFetch(videoId: string) {
+    if (fetching) return
+    setFetching(true)
+    setFetched(null)
+    const result = await fetchTranscript(videoId, language)
+    setFetched(result)
+    if ('text' in result) setTranscript(result.text)
+    setFetching(false)
   }
 
   async function build() {
@@ -251,17 +345,55 @@ export default function VideoHome() {
           </div>
         )}
 
-        {/* 逐字稿為什麼要自己貼：YouTube 的字幕下載端點只有影片擁有者能呼叫 */}
-        <div className="mt-4 rounded-2xl bg-teal-50 p-4 text-sm leading-relaxed text-teal-900 ring-1 ring-teal-200/70">
+        {/* 自動抓一次。成功就省掉手動複製，失敗就退回下面的貼上流程 */}
+        {id && (
+          <button
+            onClick={() => void autoFetch(id)}
+            disabled={fetching}
+            className="mt-3 w-full rounded-xl bg-white py-3 font-semibold text-teal-700 shadow-sm ring-1 ring-slate-200/60 disabled:opacity-60"
+          >
+            {fetching ? '試抓中…' : fetched === null ? '自動抓逐字稿' : '再試一次'}
+          </button>
+        )}
+
+        {fetched && 'text' in fetched && (
+          <div className="mt-3 rounded-2xl bg-teal-50 p-4 text-sm leading-relaxed text-teal-900 ring-1 ring-teal-200/70">
+            抓到了{fetched.auto ? '（自動辨識的字幕）' : '（人工上傳的字幕）'}。
+            <span className="mt-1 block text-xs text-teal-800/80">
+              請掃一眼對不對——抓錯軌或對到別支的話，直接在下面改或重貼。
+              {fetched.auto && '自動辨識本來就會有錯字，那是真實情況，教材會照原文處理、不會幫它亂改。'}
+            </span>
+          </div>
+        )}
+
+        {fetched && 'miss' in fetched && (
+          <div className="mt-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/70">
+            自動抓不到：{TRANSCRIPT_MISS_NOTE[fetched.miss]}
+            <span className="mt-1 block text-xs text-amber-800/80">
+              這是預料中的——YouTube 兩年前就把字幕鎖起來了，伺服器抓得到算運氣好。
+              照下面的步驟貼上就行，或用那個一鍵小工具。
+            </span>
+          </div>
+        )}
+
+        {/* 逐字稿為什麼常常要自己貼：YouTube 的字幕下載端點只有影片擁有者能呼叫，
+            非官方的那條被 PO token 與機房 IP 封鎖擋住（見 worker 的 handleTranscript） */}
+        <div className="mt-4 rounded-2xl bg-white p-4 text-sm leading-relaxed text-slate-700 shadow-sm ring-1 ring-slate-200/60">
           <span className="font-semibold">怎麼拿逐字稿</span>
-          <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-xs text-teal-900/85">
+          <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-xs text-slate-600">
             <li>在 YouTube 打開那支影片，點簡介下方的「顯示轉錄稿」</li>
             <li>右邊會出現逐字稿，整段選取複製</li>
             <li>貼到下面即可。時間戳留著更好——那樣才能只循環播教材那一段</li>
           </ol>
-          <span className="mt-2 block text-xs text-teal-800/75">
+          <button
+            onClick={() => setShowTool((v) => !v)}
+            className="mt-2 text-xs font-semibold text-teal-700"
+          >
+            {showTool ? '收起' : '懶得每次複製？裝一個一鍵小工具 →'}
+          </button>
+          {showTool && <TranscriptTool />}
+          <span className="mt-2 block text-xs text-slate-400">
             沒有「顯示轉錄稿」代表這支沒有字幕，換一支吧。
-            自動辨識的稿子有錯字是正常的，教材會照原文處理、不會幫它亂改。
           </span>
         </div>
 
@@ -272,9 +404,17 @@ export default function VideoHome() {
           placeholder={'0:00\nhello and welcome back\n0:03\ntoday we\'re going to…'}
           className="mt-3 w-full rounded-xl border border-slate-300 p-3 text-sm leading-relaxed"
         />
-        <p className="mt-1 text-xs text-slate-400">
-          貼長一點沒關係，教材只會從裡面挑最值得精聽的 8-15 行，不會整支攤開來。
-        </p>
+        {/* 超過上限會被截掉，不講的話使用者會以為後半也進去了 */}
+        {transcript.length > TRANSCRIPT_MAX_CHARS ? (
+          <p className="mt-1 text-xs text-amber-700">
+            太長了，只會用前面 {TRANSCRIPT_MAX_CHARS} 字（大約 {Math.round(TRANSCRIPT_MAX_CHARS / 500)} 到{' '}
+            {Math.round(TRANSCRIPT_MAX_CHARS / 350)} 分鐘）。想學後面那段的話，把前面刪掉再按一次。
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-slate-400">
+            教材只會從裡面挑最值得精聽的 8-15 行，不會整支攤開來。
+          </p>
+        )}
 
         {id && (
           <div className="mt-3 overflow-hidden rounded-xl bg-black">

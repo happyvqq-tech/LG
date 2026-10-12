@@ -8,6 +8,7 @@
 import { supabase } from './supabase'
 import { callClaudeJSON } from './claude'
 import { findVideoByQuery } from './songService'
+import { loadAccessPassphrase } from './accessGate'
 import { parseTranscript, transcriptText } from './transcript'
 import {
   isVideoLesson,
@@ -81,6 +82,68 @@ export async function resolvePicks(picks: VideoPick[]): Promise<ResolvedPick[]> 
     videoId: found[i]?.videoId ?? null,
     videoTitle: found[i]?.videoTitle ?? null,
   }))
+}
+
+/** 自動抓逐字稿失敗的原因，每一種的說明不一樣——全部變成「抓不到」等於沒講 */
+export type TranscriptMiss = 'blocked' | 'po_token' | 'no_captions' | 'empty' | 'unreachable'
+
+export interface FetchedTranscript {
+  /** 跟 YouTube 轉錄稿面板同格式（時間一行、內容一行） */
+  text: string
+  lang: string
+  /** 自動辨識的字幕（會有錯字，但那是真實情況，教材不會幫它亂改） */
+  auto: boolean
+}
+
+export const TRANSCRIPT_MISS_NOTE: Record<TranscriptMiss, string> = {
+  blocked: 'YouTube 擋掉了我們伺服器的 IP。這是常態不是壞掉——機房 IP 一律會被當成機器人。',
+  po_token: '這支影片的字幕要播放器簽章才拿得到，伺服器簽不出來。',
+  no_captions: '這支影片沒有字幕可以抓。',
+  empty: '抓到的字幕是空的。',
+  unreachable: '連不上 YouTube，等一下再試一次。',
+}
+
+/**
+ * 盡力試抓一次逐字稿。
+ *
+ * **預期常常失敗，而且那沒關係**：抓不到就退回請使用者貼上，
+ * 跟沒有這支功能一模一樣。詳細理由見 worker/src/index.ts 的 handleTranscript。
+ */
+export async function fetchTranscript(
+  videoId: string,
+  language: TaskLanguage,
+): Promise<FetchedTranscript | { miss: TranscriptMiss }> {
+  const base = import.meta.env.VITE_WORKER_URL?.replace(/\/$/, '')
+  if (!base) return { miss: 'unreachable' }
+
+  // 這支不共用 songService 的 postWorker：那支失敗時只回 null，
+  // 而這裡失敗的「原因」正是要給使用者看的東西（擋 IP／沒字幕／要簽章
+  // 是三件完全不同的事，混成一句「抓不到」就等於沒講）
+  const passphrase = loadAccessPassphrase()
+  try {
+    const res = await fetch(`${base}/api/transcript`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(passphrase ? { 'x-lgl-access': passphrase } : {}),
+      },
+      body: JSON.stringify({ videoId, language }),
+    })
+    const data = (await res.json().catch(() => null)) as {
+      text?: string
+      lang?: string
+      auto?: boolean
+      reason?: string
+    } | null
+
+    if (res.ok && data?.text) return { text: data.text, lang: data.lang ?? '', auto: data.auto === true }
+
+    const known: TranscriptMiss[] = ['blocked', 'po_token', 'no_captions', 'empty', 'unreachable']
+    const reason = data?.reason
+    return { miss: known.includes(reason as TranscriptMiss) ? (reason as TranscriptMiss) : 'unreachable' }
+  } catch {
+    return { miss: 'unreachable' }
+  }
 }
 
 /** 把貼上的逐字稿做成一段教材並存起來 */

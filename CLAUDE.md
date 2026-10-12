@@ -35,7 +35,7 @@
 | 台語語音 | 雅婷 TTS（`tts.api.yating.tw`），經 Worker `/api/tts` 代理，key 存 Worker secret |
 | 歌詞 | LRCLIB（`lrclib.net`，免費免金鑰，回傳逐句時間戳的 LRC），經 Worker `/api/lyrics` 代理並快取；查不到時退回請使用者自己貼 |
 | 原曲／影片 | YouTube 官方嵌入（不代管任何影音檔）。影片以 YouTube Data API v3 搜尋，經 Worker `/api/youtube`；沒設金鑰時改請使用者貼一次連結 |
-| 影片逐字稿 | 使用者從 YouTube 的「顯示轉錄稿」面板複製貼上。沒有免費的自動來源：`captions.download` 只有影片擁有者能呼叫，第三方逐字稿 API 要錢 |
+| 影片逐字稿 | 三層：Worker `/api/transcript` 盡力試抓 → 書籤小工具（在 YouTube 頁面上讀已渲染的轉錄稿面板，100% 可靠）→ 使用者手動貼上。沒有可靠的免費自動來源，理由見 `worker/src/index.ts` 的 `handleTranscript` |
 
 ## 3. 架構
 
@@ -46,7 +46,8 @@
    ├── fetch ──→ Cloudflare Worker /api/gtts ──→ texttospeech.googleapis.com（英日韓語音，含快取）
    ├── fetch ──→ Cloudflare Worker /api/tts  ──→ tts.api.yating.tw（台語語音，含快取）
    ├── fetch ──→ Cloudflare Worker /api/lyrics ──→ lrclib.net（歌詞＋逐句時間戳，含快取）
-   └── fetch ──→ Cloudflare Worker /api/youtube ──→ YouTube Data API（找原曲與學習影片，含快取）
+   ├── fetch ──→ Cloudflare Worker /api/youtube ──→ YouTube Data API（找原曲與學習影片，含快取）
+   └── fetch ──→ Cloudflare Worker /api/transcript ──→ youtube.com（盡力試抓字幕，常失敗，含快取）
                      （API key 存在 Worker 環境變數，絕不出現在前端程式碼）
 ```
 
@@ -58,6 +59,7 @@
 ├── BUILD_STEPS.md          # 分步指令包
 ├── worker/                 # Cloudflare Worker（獨立 wrangler 專案）
 │   ├── src/index.ts
+│   ├── src/youtubeCaptions.ts  # YouTube 字幕解析（純函式，網路那段在 index.ts）
 │   ├── src/prompts/        # 全部 15 個 system prompt 與模型選擇（見第 6 節）
 │   └── wrangler.toml
 ├── src/
@@ -128,6 +130,14 @@
   照抄歌曲的設計會做出一份沒搔到癢處的教材
 - **逐字稿跟歌詞一樣絕不讓模型生成**，理由相同（見下）。自動辨識的稿子有錯字是真實情況，
   prompt 明令照抄、不准「修正」
+- **逐字稿沒有可靠的免費自動來源，這是已經查證過的結論，不要再換個套件重試一次**：
+  官方 `captions.download` 只有影片擁有者能呼叫；非官方的 `timedtext` 卡 PO token
+  （字幕網址帶 `exp=xpe` 就只回空內容，token 要 BotGuard 挑戰才算得出來）與機房 IP 封鎖
+  （Cloudflare／AWS／GCP 的 IP 收到「Sign in to confirm you're not a bot」）；
+  前端直接抓則被 CORS 擋死（youtube.com 不回 `Access-Control-Allow-Origin`）。
+  社群的解法是住宅代理，那要錢。所以 `/api/transcript` 定位是「失敗成本為零的試抓」，
+  真正可靠的自動化是書籤小工具——它在 YouTube 頁面上跑，讀的是播放器**已經渲染好**的
+  轉錄稿面板，簽章那關播放器早就過了
 - **歌詞絕不讓模型生成**：模型憑記憶背的歌詞會錯字漏行，而教錯的歌詞比不教更糟——學習者跟著原曲唱會對不上，又分不出是自己聽錯還是教材錯。歌詞一律來自 LRCLIB（自動）或使用者貼上（退路），且生成教材前一定要讓使用者看過——歌詞庫偶爾會對到 Live 版或翻唱版
 - **唱歌會破壞語調，所以「說的版本」是矯正器不是附屬品**：日文靠音高辨義（雨 HL ／ 飴 LH）而唱歌時音高由旋律決定，英文的重音會被節拍帶跑。songLesson 的 `prosody` 欄位就是在標這些地方，跟著唱會把錯的一起練進去且定型後極難改
 
