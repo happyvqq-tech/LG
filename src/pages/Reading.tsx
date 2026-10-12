@@ -16,17 +16,23 @@ function HighlightedScript({ script, chunkTexts }: { script: string; chunkTexts:
     const patterns = chunkTexts
       .filter((t) => t.trim().length > 0)
       .sort((a, b) => b.length - a.length)
-      .map(escapeRegExp)
+      // 空白放寬成「一個以上的空白」：稿子裡可能剛好在語塊中間換行，
+      // 那時逐字比對會標不到，而標不到就等於給了一張跟文章無關的清單
+      .map((t) => escapeRegExp(t).replace(/\s+/g, '\\s+'))
     if (patterns.length === 0) return [script]
     return script.split(new RegExp(`(${patterns.join('|')})`, 'gi'))
   }, [script, chunkTexts])
 
-  const lowerChunks = useMemo(() => new Set(chunkTexts.map((t) => t.toLowerCase())), [chunkTexts])
+  /** 比對時把空白正規化，理由同上 */
+  const lowerChunks = useMemo(
+    () => new Set(chunkTexts.map((t) => t.toLowerCase().replace(/\s+/g, ' ').trim())),
+    [chunkTexts],
+  )
 
   return (
     <p className="whitespace-pre-line text-lg leading-relaxed">
       {parts.map((part, i) =>
-        lowerChunks.has(part.toLowerCase()) ? (
+        lowerChunks.has(part.toLowerCase().replace(/\s+/g, ' ').trim()) ? (
           <mark key={i} className="rounded bg-amber-200 px-0.5">
             {part}
           </mark>
