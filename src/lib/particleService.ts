@@ -98,7 +98,6 @@ export async function buildParticleSession(profileId: string): Promise<ParticleQ
       promptModule: 'particleTutor',
       vars: { items } satisfies ParticleQuizInput,
       messages: [{ role: 'user', content: '請判斷這些句子的虛詞用法' }],
-      maxTokens: 2500,
     },
     isParticleQuizResult,
   )

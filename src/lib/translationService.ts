@@ -25,7 +25,6 @@ export async function ensureListeningTranslation(task: Task): Promise<{
       promptModule: 'translate',
       vars: { language, sentences } satisfies TranslateInput,
       messages: [{ role: 'user', content: '請翻譯' }],
-      maxTokens: 1500,
     },
     makeIsTranslateResult(sentences.length),
   )

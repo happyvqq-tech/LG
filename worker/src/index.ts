@@ -3,7 +3,7 @@
  * 唯一職責：藏 API key、轉發上游、簡單限流（CLAUDE.md 第 2/3 節）
  */
 
-import { isPromptModule, resolvePrompt } from './prompts'
+import { isPromptModule, resolvePrompt, type ModelRequestOptions } from './prompts'
 import { extractArticle } from './articleExtract'
 import { mergeFeeds, parseFeed, type FeedItem } from './rss'
 import {
@@ -113,7 +113,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 19
+const WORKER_VERSION = 20
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -1179,6 +1179,8 @@ export default {
     let model: string
     let system: string | undefined
     let maxTokens: number
+    /** 這個模型必須附帶的欄位（新一代要明確關掉思考，見 prompts/index.ts 的 requestOptionsFor） */
+    let options: ModelRequestOptions = { body: {}, betas: [] }
 
     if (body.prompt) {
       if (!isPromptModule(body.prompt.module)) {
@@ -1191,6 +1193,7 @@ export default {
       const resolved = resolvePrompt(body.prompt.module, body.prompt.vars)
       model = resolved.model
       system = resolved.system
+      options = resolved.options
       // 前端可以往下調（例如省 token），但不能往上超過模組的預設上限
       maxTokens = Math.min(body.max_tokens ?? resolved.maxTokens, resolved.maxTokens)
     } else {
@@ -1213,8 +1216,10 @@ export default {
         'x-api-key': env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
+        ...(options.betas.length > 0 ? { 'anthropic-beta': options.betas.join(',') } : {}),
       },
       body: JSON.stringify({
+        ...options.body,
         model,
         system,
         messages: body.messages,

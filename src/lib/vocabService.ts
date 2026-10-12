@@ -104,7 +104,6 @@ export async function addNewCards(
         known,
       } satisfies VocabEnrichInput,
       messages: [{ role: 'user', content: fromList ? '請補完這批單字' : '請產生新單字' }],
-      maxTokens: 3000,
     },
     isVocabEnrichResult,
   )

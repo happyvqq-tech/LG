@@ -165,7 +165,6 @@ export default function ClassicalRead() {
             level: entry!.level,
           } satisfies AnnotateInput,
           messages: [{ role: 'user', content: '請講解本段' }],
-          maxTokens: 3000,
         },
         isAnnotateResult,
       )
@@ -193,7 +192,6 @@ export default function ClassicalRead() {
             level: entry!.level,
           } satisfies TranslationGradeInput,
           messages: [{ role: 'user', content: '請批改' }],
-          maxTokens: 3000,
         },
         isTranslationGradeResult,
       )

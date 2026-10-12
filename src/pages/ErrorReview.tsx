@@ -86,7 +86,6 @@ export default function ErrorReview() {
             })),
           } satisfies ReviewPracticeInput,
           messages: [{ role: 'user', content: '請出類似題' }],
-          maxTokens: 3000,
         },
         isReviewPracticeResult,
       )
