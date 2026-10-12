@@ -5,6 +5,7 @@
 
 import { isPromptModule, resolvePrompt } from './prompts'
 import { extractArticle } from './articleExtract'
+import { mergeFeeds, parseFeed, type FeedItem } from './rss'
 import {
   extractCaptionTracks,
   json3ToPanelText,
@@ -112,7 +113,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 18
+const WORKER_VERSION = 19
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -943,6 +944,115 @@ async function handleArticle(request: Request, env: Env, origin: string): Promis
   })
 }
 
+// ─────────────────────────────────────────────────────────────
+// 文章推薦的素材池：各語言幾個新聞網站自己發佈的 RSS
+//
+// 這份清單**在這個開發環境裡驗證不到**（容器的網路代理擋掉了所有新聞網站），
+// 用的是長年穩定的公開網址。所以設計成：每個來源各自成敗，回傳時附上
+// 哪些抓得到、哪些抓不到，畫面會照實顯示。某個網址失效時改這裡、
+// wrangler deploy 一次就好，前端不用動。
+//
+// 挑來源的原則：每個語言都放「難度不同」的幾家，讓 AI 有得挑——
+// 全放硬新聞的話，B1 的人永遠只會被推薦到最難的那種。
+// ─────────────────────────────────────────────────────────────
+
+const FEEDS: Record<string, Array<{ name: string; url: string }>> = {
+  英文: [
+    { name: 'BBC Technology', url: 'https://feeds.bbci.co.uk/news/technology/rss.xml' },
+    { name: 'BBC Science', url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml' },
+    { name: 'NPR News', url: 'https://feeds.npr.org/1001/rss.xml' },
+    { name: 'The Guardian Life & Style', url: 'https://www.theguardian.com/lifeandstyle/rss' },
+  ],
+  日文: [
+    { name: 'NHK 主要ニュース', url: 'https://www3.nhk.or.jp/rss/news/cat0.xml' },
+    { name: 'NHK 科学・文化', url: 'https://www3.nhk.or.jp/rss/news/cat3.xml' },
+    { name: 'BBC ニュース日本語', url: 'https://feeds.bbci.co.uk/japanese/rss.xml' },
+  ],
+  韓文: [
+    { name: 'BBC 코리아', url: 'https://feeds.bbci.co.uk/korean/rss.xml' },
+    { name: '한겨레', url: 'https://www.hani.co.kr/rss/' },
+    { name: '경향신문', url: 'https://www.khan.co.kr/rss/rssdata/total_news.xml' },
+  ],
+}
+
+/** 一次送進 prompt 的條目上限。四家各十則左右，挑得出東西又不會吃太多 token */
+const FEED_ITEM_LIMIT = 36
+
+async function fetchOneFeed(url: string): Promise<FeedItem[] | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'user-agent': 'LG-family-language-app (https://github.com/happyvqq-tech/LG)',
+        accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml',
+      },
+      // 一家慢不能拖垮整個推薦。Workers 沒有 fetch 逾時參數，用 AbortSignal
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return null
+    const items = parseFeed((await res.text()).slice(0, 800_000))
+    return items.length > 0 ? items : null
+  } catch {
+    return null
+  }
+}
+
+async function handleFeeds(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+
+  let body: { language?: string }
+  try {
+    body = (await request.json()) as { language?: string }
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+
+  const feeds = FEEDS[body.language ?? '']
+  if (!feeds) return jsonResponse({ error: 'unsupported_language' }, 400, origin)
+
+  // 新聞會更新，但不需要每按一次就重抓——半小時內同一個語言共用一份
+  const cache = caches.default
+  const cacheRequest = new Request(`https://feeds-cache.local/${encodeURIComponent(body.language ?? '')}`, {
+    method: 'GET',
+  })
+  const cached = await cache.match(cacheRequest)
+  if (cached) {
+    return new Response(cached.body, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'x-feeds-cache': 'hit', ...corsHeaders(origin) },
+    })
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'feeds', 10)) {
+    return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  const results = await Promise.all(feeds.map((f) => fetchOneFeed(f.url)))
+  const sources = feeds.map((f, i) => ({ name: f.name, ok: results[i] !== null }))
+  const items = mergeFeeds(
+    feeds.map((f, i) => ({ source: f.name, items: results[i] ?? [] })),
+    FEED_ITEM_LIMIT,
+  )
+
+  // 全部失敗就不要快取：多半是一時連不上，快取等於把壞運氣延長半小時
+  if (items.length === 0) {
+    return jsonResponse({ error: 'feeds_unavailable', sources }, 502, origin)
+  }
+
+  const payload = JSON.stringify({ items, sources })
+  await cache.put(
+    cacheRequest,
+    new Response(payload, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=1800' },
+    }),
+  )
+  return new Response(payload, {
+    status: 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
@@ -1021,6 +1131,10 @@ export default {
 
     if (url.pathname === '/api/article' && request.method === 'POST') {
       return handleArticle(request, env, origin)
+    }
+
+    if (url.pathname === '/api/feeds' && request.method === 'POST') {
+      return handleFeeds(request, env, origin)
     }
 
     // 前端在通關密碼輸入畫面用這支立即驗證對不對，不用等到真的送出一次

@@ -35,6 +35,7 @@
 | 台語語音 | 雅婷 TTS（`tts.api.yating.tw`），經 Worker `/api/tts` 代理，key 存 Worker secret |
 | 歌詞 | LRCLIB（`lrclib.net`，免費免金鑰，回傳逐句時間戳的 LRC），經 Worker `/api/lyrics` 代理並快取；查不到時退回請使用者自己貼 |
 | 原曲／影片 | YouTube 官方嵌入（不代管任何影音檔）。影片以 YouTube Data API v3 搜尋，經 Worker `/api/youtube`；沒設金鑰時改請使用者貼一次連結 |
+| 文章推薦 | 各語言幾家新聞的 RSS，經 Worker `/api/feeds` 合併並快取 30 分鐘（清單在 `worker/src/index.ts` 的 `FEEDS`，某家失效改那裡再 deploy 就好）。AI 只從這份真實清單裡**用索引挑**，不憑記憶推薦 |
 | 文章 | 使用者貼網址或全文。網址經 Worker `/api/article` 抓一次並抽出本文（純函式在 `worker/src/articleExtract.ts`），抓不到就請使用者貼；AI 只分析不重打原文 |
 | 影片逐字稿 | 三層：Worker `/api/transcript` 盡力試抓 → 書籤小工具（在 YouTube 頁面上讀已渲染的轉錄稿面板，100% 可靠）→ 使用者手動貼上。沒有可靠的免費自動來源，理由見 `worker/src/index.ts` 的 `handleTranscript` |
 
@@ -49,7 +50,8 @@
    ├── fetch ──→ Cloudflare Worker /api/lyrics ──→ lrclib.net（歌詞＋逐句時間戳，含快取）
    ├── fetch ──→ Cloudflare Worker /api/youtube ──→ YouTube Data API（找原曲與學習影片，含快取）
    ├── fetch ──→ Cloudflare Worker /api/transcript ──→ youtube.com（盡力試抓字幕，常失敗，含快取）
-   └── fetch ──→ Cloudflare Worker /api/article ──→ 任意公開網頁（抽出本文，含快取與內網防護）
+   ├── fetch ──→ Cloudflare Worker /api/article ──→ 任意公開網頁（抽出本文，含快取與內網防護）
+   └── fetch ──→ Cloudflare Worker /api/feeds ──→ 各家新聞 RSS（今天的標題清單，含快取）
                      （API key 存在 Worker 環境變數，絕不出現在前端程式碼）
 ```
 
@@ -63,6 +65,7 @@
 │   ├── src/index.ts
 │   ├── src/youtubeCaptions.ts  # YouTube 字幕解析（純函式，網路那段在 index.ts）
 │   ├── src/articleExtract.ts   # 網頁 HTML 抽出本文（純函式，同上）
+│   ├── src/rss.ts              # RSS／Atom 解析與多來源輪流合併（純函式）
 │   ├── src/prompts/        # 全部 15 個 system prompt 與模型選擇（見第 6 節）
 │   └── wrangler.toml
 ├── src/
@@ -120,12 +123,13 @@
 | 歌曲教材 | `claude-sonnet-4-6` | 把使用者貼上的歌詞分段，逐行標「能不能拿去用」 | JSON |
 | 影片方向 | `claude-sonnet-4-6` | 依程度與主題給 YouTube **搜尋方向**；**禁止推薦具體影片** | JSON |
 | 影片教材 | `claude-sonnet-4-6` | 從逐字稿挑 8-15 行精聽，標連音脫落、填充詞、腔調 | JSON |
+| 文章推薦 | `claude-sonnet-4-6` | 從今天的 RSS 清單裡挑 3-5 篇並評難度；**只能用索引回答，不可推薦清單外的文章** | JSON |
 | 文章教材 | `claude-sonnet-4-6` | 真實文章的長句解剖、指涉鏈、書面轉口語；**禁止重打或改寫原文** | JSON |
 
 - API 端點：`POST https://api.anthropic.com/v1/messages`，headers：`x-api-key`、`anthropic-version: 2023-06-01`、`content-type: application/json`
 - 官方文件：https://docs.claude.com/en/api/overview
 - **凡要求 JSON 輸出的模組**：system prompt 必須明確要求「只輸出 JSON，不加任何前言與 markdown 圍欄」；前端 `claude.ts` 仍需做圍欄剝除與 try-catch 解析，解析失敗自動重試一次
-- max_tokens：對話 1024、任務生成 3000、批改 3000、週報 2000、台語腳本 3000、歌曲推薦 2000、歌曲教材 4000（逐行四個欄位，上限要給得寬）、影片方向 2000、影片教材 2500、文章教材 3000（長句解剖要把原句整句抄回來）
+- max_tokens：對話 1024、任務生成 3000、批改 3000、週報 2000、台語腳本 3000、歌曲推薦 2000、歌曲教材 4000（逐行四個欄位，上限要給得寬）、影片方向 2000、影片教材 2500、文章推薦 2000、文章教材 3000（長句解剖要把原句整句抄回來）
 - **影片不讓模型推薦具體某一支**：模型記不住哪支 YouTube 影片存在、標題叫什麼、在哪個頻道。
   推薦一支不存在的影片比不推薦更糟——使用者搜不到就會不信任整個功能。所以 videoPicker 只給
   搜尋方向（它真正可靠的事），真實影片交給 YouTube Data API；沒設金鑰時就給一個搜尋連結，
@@ -134,6 +138,11 @@
   影片是真實口語，本來就能用，要回答的是**為什麼你聽不懂**——連音與脫落（what do you→whaddaya、
   〜ている→〜てる）、填充詞（you know／なんか，知道可以當雜訊跳過本身就是聽力技能）、腔調規則。
   照抄歌曲的設計會做出一份沒搔到癢處的教材
+- **文章可以 AI 推薦、影片只能給搜尋方向，差別在有沒有「今天的清單」**：
+  模型記不住哪篇文章或哪支影片存在。新聞有 RSS，所以 Worker 先把今天真的存在的標題抓回來，
+  模型只從清單裡**用索引挑**；前端驗證時索引超出範圍、重複、非整數的一律丟掉——
+  結構上就不可能推薦出不存在的文章。畫面上的標題與網址都來自 RSS，不是模型寫的。
+  YouTube 沒有這種清單可以先給它看，所以影片那邊退一步只給搜尋字串
 - **三個真實素材模組各自回答不同的問題，不可以互相照抄**：
   歌曲＝這句能不能拿去用（旋律會為了押韻扭曲語言）；影片＝為什麼你聽不懂（連音、脫落、
   填充詞）；文章＝**為什麼你讀不動**（長句解剖、指涉鏈、書面轉口語）。

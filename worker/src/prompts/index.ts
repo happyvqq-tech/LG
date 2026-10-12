@@ -30,6 +30,7 @@ import { songLessonSystemPrompt, type SongLessonInput } from './songLesson'
 import { songPickerSystemPrompt, type SongPickerInput } from './songPicker'
 import { videoLessonSystemPrompt, type VideoLessonInput } from './videoLesson'
 import { articleLessonSystemPrompt, type ArticleLessonInput } from './articleLesson'
+import { articlePickerSystemPrompt, type ArticlePickerInput } from './articlePicker'
 import { videoPickerSystemPrompt, type VideoPickerInput } from './videoPicker'
 import { taigiScriptSystemPrompt, type TaigiScriptInput } from './taigiScript'
 import { taskGeneratorSystemPrompt, type TaskGeneratorInput } from './taskGenerator'
@@ -63,6 +64,7 @@ export type PromptModule =
   | 'videoPicker'
   | 'videoLesson'
   | 'articleLesson'
+  | 'articlePicker'
 
 interface PromptSpec {
   model: string
@@ -198,6 +200,12 @@ const REGISTRY: Record<PromptModule, PromptSpec> = {
     model: SONNET,
     maxTokens: 3000,
     build: (v) => articleLessonSystemPrompt(as<ArticleLessonInput>(v)),
+  },
+  // 從真實清單裡挑、用索引回答——判斷「這篇對這個程度吃不吃得下」是這支的全部價值
+  articlePicker: {
+    model: SONNET,
+    maxTokens: 2000,
+    build: (v) => articlePickerSystemPrompt(as<ArticlePickerInput>(v)),
   },
 }
 
