@@ -29,6 +29,7 @@ import { reviewPracticeSystemPrompt, type ReviewPracticeInput } from './reviewPr
 import { songLessonSystemPrompt, type SongLessonInput } from './songLesson'
 import { songPickerSystemPrompt, type SongPickerInput } from './songPicker'
 import { videoLessonSystemPrompt, type VideoLessonInput } from './videoLesson'
+import { articleLessonSystemPrompt, type ArticleLessonInput } from './articleLesson'
 import { videoPickerSystemPrompt, type VideoPickerInput } from './videoPicker'
 import { taigiScriptSystemPrompt, type TaigiScriptInput } from './taigiScript'
 import { taskGeneratorSystemPrompt, type TaskGeneratorInput } from './taskGenerator'
@@ -61,6 +62,7 @@ export type PromptModule =
   | 'songLesson'
   | 'videoPicker'
   | 'videoLesson'
+  | 'articleLesson'
 
 interface PromptSpec {
   model: string
@@ -189,6 +191,13 @@ const REGISTRY: Record<PromptModule, PromptSpec> = {
     model: SONNET,
     maxTokens: 2500,
     build: (v) => videoLessonSystemPrompt(as<VideoLessonInput>(v)),
+  },
+  // 長句解剖是這個模組的核心價值，而拆一句三層子句要把原文整句抄回來，
+  // 所以上限比影片寬一點；但仍然是一次產出，不能給到沒有邊
+  articleLesson: {
+    model: SONNET,
+    maxTokens: 3000,
+    build: (v) => articleLessonSystemPrompt(as<ArticleLessonInput>(v)),
   },
 }
 

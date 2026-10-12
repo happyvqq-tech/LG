@@ -11,8 +11,16 @@ import { useProfile } from '../lib/profileContext'
 import { listPastTasks } from '../lib/taskService'
 import { listAllSongs } from '../lib/songService'
 import { listVideos } from '../lib/videoService'
+import { listArticles } from '../lib/articleService'
 import { loadReviewedToday, markReviewed, pickReviewTasks } from '../lib/reviewSchedule'
-import { isTaskLanguage, type Language, type Song, type Task, type Video } from '../lib/types'
+import {
+  isTaskLanguage,
+  type Article,
+  type Language,
+  type Song,
+  type Task,
+  type Video,
+} from '../lib/types'
 
 const ALL = '__all__'
 
@@ -38,6 +46,8 @@ export default function TaskArchive() {
   const [songs, setSongs] = useState<Song[]>([])
   /** 影片同理：做好的精聽教材值得回來重聽，不該只有 /video 進得去 */
   const [videos, setVideos] = useState<Video[]>([])
+  /** 文章同理：做好的精讀教材值得回來重讀 */
+  const [articles, setArticles] = useState<Article[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [langFilter, setLangFilter] = useState<Language | typeof ALL>(ALL)
 
@@ -54,6 +64,11 @@ export default function TaskArchive() {
     listVideos(profile.id)
       .then((list) => alive && setVideos(list))
       .catch(() => alive && setVideos([]))
+
+    // 文章同樣獨立載入（還沒跑 migration-016 的資料庫會失敗，但不該連帶壞掉）
+    listArticles(profile.id)
+      .then((list) => alive && setArticles(list))
+      .catch(() => alive && setArticles([]))
 
     listPastTasks(profile.id, null)
       .then((list) => {
@@ -180,6 +195,34 @@ export default function TaskArchive() {
                     <span className="block truncate font-bold">{v.title}</span>
                     <span className="block truncate text-sm text-slate-500">
                       {v.language}・{formatDay(v.created_at)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-slate-300">→</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 文章跟歌曲、影片一樣不跟語言篩選走，理由同上 */}
+      {articles.length > 0 && (
+        <section className="mt-6">
+          <h2 className="px-1 font-bold text-slate-800">文章（{articles.length}）</h2>
+          <p className="mt-0.5 px-1 text-xs text-slate-500">回來重讀，長句拆熟了才算過</p>
+          <div className="mt-2 grid gap-3">
+            {articles.map((a) => (
+              <Link
+                key={a.id}
+                to={`/article/${a.id}`}
+                className="block rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 active:scale-[0.98]"
+              >
+                <span className="flex items-center gap-2">
+                  <span>📄</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-bold">{a.title}</span>
+                    <span className="block truncate text-sm text-slate-500">
+                      {a.language}・{formatDay(a.created_at)}
                     </span>
                   </span>
                   <span className="shrink-0 text-slate-300">→</span>
