@@ -152,7 +152,6 @@ export async function suggestSongs(
         exclude,
       } satisfies SongPickerInput,
       messages: [{ role: 'user', content: '請推薦適合的歌' }],
-      maxTokens: 2000,
     },
     isSongPickerResult,
   )
@@ -177,7 +176,6 @@ export async function createSong(
       promptModule: 'songLesson',
       vars: { language, level, title, artist, lyrics } satisfies SongLessonInput,
       messages: [{ role: 'user', content: '請把這首歌做成教材' }],
-      maxTokens: 4000,
     },
     isSongLesson,
   )

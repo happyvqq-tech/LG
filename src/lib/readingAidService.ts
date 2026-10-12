@@ -37,7 +37,6 @@ export async function ensureReadingAid(task: Task): Promise<{
       promptModule: 'readingAid',
       vars: { language, sentences } satisfies ReadingAidInput,
       messages: [{ role: 'user', content: '請標註讀音' }],
-      maxTokens: 2000,
     },
     makeIsReadingAidResult(sentences.length),
   )

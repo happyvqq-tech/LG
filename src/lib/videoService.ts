@@ -55,7 +55,6 @@ export async function suggestSearches(
       promptModule: 'videoPicker',
       vars: { language, level, topic, interests: interests ?? undefined } satisfies VideoPickerInput,
       messages: [{ role: 'user', content: '請給我適合的搜尋方向' }],
-      maxTokens: 2000,
     },
     isVideoPickerResult,
   )
@@ -166,7 +165,6 @@ export async function createVideo(
       promptModule: 'videoLesson',
       vars: { language, level, title, transcript: forPrompt } satisfies VideoLessonInput,
       messages: [{ role: 'user', content: '請把這段影片做成聽力教材' }],
-      maxTokens: 2500,
     },
     isVideoLesson,
   )

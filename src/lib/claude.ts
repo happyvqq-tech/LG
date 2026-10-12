@@ -109,16 +109,33 @@ export interface CallClaudeArgs {
    */
   vars: unknown
   messages: ChatMessage[]
-  /** 只能往下調（省 token），超過模組預設上限的話 Worker 會夾回上限 */
+  /**
+   * 只能往下調（省 token），超過模組預設上限的話 Worker 會夾回上限。
+   * 一般**不要傳**：上限的唯一來源是 worker/src/prompts/index.ts。以前各呼叫點
+   * 都寫死一份，換成新 tokenizer（同樣文字多 30% token）時這些舊數字會把新上限
+   * 壓回去、把教材截斷，所以 2026-10 全部拿掉了
+   */
   maxTokens?: number
 }
 
 interface AnthropicResponse {
+  /** 新一代模型會在 text 前面放 thinking／fallback 區塊，所以一律依 type 取，不能取 [0] */
   content?: Array<{ type: string; text?: string }>
+  stop_reason?: string
+}
+
+interface ClaudeReply {
+  text: string
+  /** max_tokens＝被截斷；callClaudeJSON 解析失敗時用它講出真正的原因 */
+  stopReason: string | undefined
 }
 
 /** 呼叫 Worker 代理，回傳純文字回覆 */
 export async function callClaude(args: CallClaudeArgs): Promise<string> {
+  return (await requestClaude(args)).text
+}
+
+async function requestClaude(args: CallClaudeArgs): Promise<ClaudeReply> {
   const workerUrl = import.meta.env.VITE_WORKER_URL
   if (!workerUrl) {
     throw new ClaudeError(
@@ -208,12 +225,23 @@ export async function callClaude(args: CallClaudeArgs): Promise<string> {
   }
 
   const data = (await res.json()) as AnthropicResponse
+
+  // 新一代模型有安全分類器，拒答時是 HTTP 200＋stop_reason: refusal，沒有任何文字。
+  // 不先擋的話會落到下面的「回應為空」，看起來像系統壞掉；而且重試也不會好
+  if (data.stop_reason === 'refusal') {
+    throw new ClaudeError(
+      'api',
+      'AI 拒絕回答（stop_reason: refusal）',
+      'AI 判斷這段內容不適合處理。換一份素材或換個說法再試，重試同一份不會有不同結果。',
+    )
+  }
+
   const text = (data.content ?? [])
     .filter((b) => b.type === 'text')
     .map((b) => b.text ?? '')
     .join('')
-  if (!text) throw new ClaudeError('api', 'AI 回應為空，請重試')
-  return text
+  if (!text) throw new ClaudeError('api', `AI 回應為空（stop_reason: ${data.stop_reason ?? '無'}），請重試`)
+  return { text, stopReason: data.stop_reason }
 }
 
 /** 剝除 markdown 圍欄並擷取最外層 JSON 物件 */
@@ -234,8 +262,10 @@ export async function callClaudeJSON<T>(
   validate?: (v: unknown) => v is T,
 ): Promise<T> {
   let lastError: unknown
+  let truncated = false
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await callClaude(args)
+    const { text, stopReason } = await requestClaude(args)
+    truncated = stopReason === 'max_tokens'
     try {
       const parsed = JSON.parse(stripJsonFences(text)) as unknown
       if (validate && !validate(parsed)) {
@@ -245,6 +275,15 @@ export async function callClaudeJSON<T>(
     } catch (e) {
       lastError = e
     }
+  }
+  // 被截斷跟格式錯是兩回事：截斷代表那個模組的 token 上限給得太緊，重試幾次都一樣，
+  // 要改的是 worker/src/prompts/index.ts 的 maxTokens。講清楚才查得到
+  if (truncated) {
+    throw new ClaudeError(
+      'parse',
+      `AI 回應被截斷（stop_reason: max_tokens，模組 ${args.promptModule}）`,
+      'AI 這次寫太長被切斷了。可以再試一次；如果一直發生，請回報是哪個功能。',
+    )
   }
   throw new ClaudeError(
     'parse',

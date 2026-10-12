@@ -169,7 +169,6 @@ export async function suggestArticles(
         items: items.map((it) => ({ title: it.title, summary: it.summary, source: it.source })),
       } satisfies ArticlePickerInput,
       messages: [{ role: 'user', content: '請挑出適合我的文章' }],
-      maxTokens: 2000,
     },
     makeIsArticlePickerResult(items.length),
   )
@@ -198,7 +197,6 @@ export async function createArticle(
       promptModule: 'articleLesson',
       vars: { language, level, title: title.trim(), text: body } satisfies ArticleLessonInput,
       messages: [{ role: 'user', content: '請把這篇文章做成閱讀教材' }],
-      maxTokens: 3000,
     },
     isArticleLesson,
   )

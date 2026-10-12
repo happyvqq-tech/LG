@@ -95,7 +95,6 @@ export async function generateQuiz(
         cards,
       } satisfies QuizGenInput,
       messages: [{ role: 'user', content: '請出題' }],
-      maxTokens: 3000,
     },
     isQuizGenResult,
   )

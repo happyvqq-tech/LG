@@ -53,7 +53,6 @@ export async function createExtensive(
       promptModule: 'extensive',
       vars: { language, level: easier, topic } satisfies ExtensiveInput,
       messages: [{ role: 'user', content: '請生成一篇泛聽材料' }],
-      maxTokens: 3000,
     },
     isExtensiveResult,
   )
