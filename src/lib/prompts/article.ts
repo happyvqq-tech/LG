@@ -91,6 +91,64 @@ export function isArticleLesson(v: unknown): v is ArticleLesson {
   return true
 }
 
+// ---------------- 推薦 ----------------
+
+export interface ArticlePickerInput {
+  language: TaskLanguage
+  level: Level
+  topic?: string
+  interests?: string
+  items: Array<{ title: string; summary: string; source: string }>
+}
+
+export interface ArticlePick {
+  /** 清單裡的索引——驗證時已確認在範圍內且不重複 */
+  index: number
+  why: string
+  caution: string
+  /** 1-5，以這位學習者的程度為基準 */
+  difficulty: number
+}
+
+export interface ArticlePickerResult {
+  picks: ArticlePick[]
+}
+
+/**
+ * 推薦結果的驗證。要知道清單有幾則才能驗索引，所以做成工廠函式。
+ *
+ * 這裡是「AI 不可能推薦不存在的文章」真正被保證的地方：
+ * prompt 只是請它照規矩來，索引超出範圍、不是整數、或重複的，在這裡一律丟掉。
+ */
+export function makeIsArticlePickerResult(itemCount: number) {
+  return (v: unknown): v is ArticlePickerResult => {
+    if (typeof v !== 'object' || v === null) return false
+    const o = v as Record<string, unknown>
+    if (!Array.isArray(o.picks)) return false
+
+    const seen = new Set<number>()
+    o.picks = o.picks.filter((p): p is ArticlePick => {
+      if (typeof p !== 'object' || p === null) return false
+      const r = p as Record<string, unknown>
+      const i = r.index
+      if (typeof i !== 'number' || !Number.isInteger(i) || i < 0 || i >= itemCount) return false
+      if (seen.has(i)) return false
+      // caution 一定要有：prompt 明講「沒有缺點的素材不存在」，
+      // 空的代表模型在敷衍，那筆的推薦理由也不會可信
+      if (typeof r.why !== 'string' || r.why.trim() === '') return false
+      if (typeof r.caution !== 'string' || r.caution.trim() === '') return false
+      const d = typeof r.difficulty === 'number' ? Math.round(r.difficulty) : 3
+      r.difficulty = Math.min(5, Math.max(1, d))
+      seen.add(i)
+      return true
+    })
+
+    return (o.picks as unknown[]).length > 0
+  }
+}
+
+// ---------------- 篇幅 ----------------
+
 /**
  * 一次分析的字數上限。
  *

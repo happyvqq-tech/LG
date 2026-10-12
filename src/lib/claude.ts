@@ -80,6 +80,7 @@ export type PromptModule =
   | 'videoPicker'
   | 'videoLesson'
   | 'articleLesson'
+  | 'articlePicker'
 
 export type ClaudeErrorKind = 'network' | 'rate_limited' | 'api' | 'parse' | 'access_denied'
 

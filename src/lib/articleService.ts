@@ -10,8 +10,11 @@ import { loadAccessPassphrase } from './accessGate'
 import {
   ARTICLE_MAX_CHARS,
   isArticleLesson,
+  makeIsArticlePickerResult,
   type ArticleLesson,
   type ArticleLessonInput,
+  type ArticlePick,
+  type ArticlePickerInput,
 } from './prompts/article'
 import type { Article, Level, TaskLanguage } from './types'
 
@@ -88,6 +91,94 @@ export async function fetchArticle(url: string): Promise<FetchedArticle | { miss
   } catch {
     return { miss: 'unreachable' }
   }
+}
+
+// ---------------- 推薦 ----------------
+
+export interface FeedEntry {
+  title: string
+  link: string
+  summary: string
+  source: string
+}
+
+export interface FeedSource {
+  name: string
+  ok: boolean
+}
+
+/**
+ * 抓今天的新聞清單（Worker 從各家 RSS 合併，半小時快取）。
+ *
+ * 回傳每個來源的成敗：RSS 網址偶爾會改，某一家掛掉時畫面要照實說，
+ * 不然使用者只會覺得「推薦怎麼都是同一家」而不知道為什麼。
+ */
+export async function fetchFeeds(
+  language: TaskLanguage,
+): Promise<{ items: FeedEntry[]; sources: FeedSource[] } | { sources: FeedSource[]; failed: true }> {
+  const base = import.meta.env.VITE_WORKER_URL?.replace(/\/$/, '')
+  if (!base) return { sources: [], failed: true }
+
+  const passphrase = loadAccessPassphrase()
+  try {
+    const res = await fetch(`${base}/api/feeds`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(passphrase ? { 'x-lgl-access': passphrase } : {}),
+      },
+      body: JSON.stringify({ language }),
+    })
+    const data = (await res.json().catch(() => null)) as {
+      items?: FeedEntry[]
+      sources?: FeedSource[]
+    } | null
+    const sources = data?.sources ?? []
+    if (res.ok && data?.items && data.items.length > 0) return { items: data.items, sources }
+    return { sources, failed: true }
+  } catch {
+    return { sources: [], failed: true }
+  }
+}
+
+export interface ResolvedArticlePick extends ArticlePick {
+  title: string
+  link: string
+  source: string
+}
+
+/**
+ * 請 AI 從真實清單裡挑。回來的只有索引，這裡把索引換回真的標題與網址——
+ * 標題與網址都來自 RSS，不是模型寫的，所以點下去一定是那篇。
+ */
+export async function suggestArticles(
+  language: TaskLanguage,
+  level: Level,
+  items: FeedEntry[],
+  topic: string,
+  interests: string | null,
+): Promise<ResolvedArticlePick[]> {
+  const result = await callClaudeJSON(
+    {
+      promptModule: 'articlePicker',
+      vars: {
+        language,
+        level,
+        topic: topic.trim() || undefined,
+        interests: interests ?? undefined,
+        items: items.map((it) => ({ title: it.title, summary: it.summary, source: it.source })),
+      } satisfies ArticlePickerInput,
+      messages: [{ role: 'user', content: '請挑出適合我的文章' }],
+      maxTokens: 2000,
+    },
+    makeIsArticlePickerResult(items.length),
+  )
+  return result.picks.map((p) => ({
+    ...p,
+    title: items[p.index].title,
+    link: items[p.index].link,
+    source: items[p.index].source,
+  }))
 }
 
 /** 把一篇文章做成教材並存起來 */

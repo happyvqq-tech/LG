@@ -1,10 +1,11 @@
-// 文章學習首頁：貼網址或貼全文 → AI 分析 → 做成教材
+// 文章學習首頁：AI 從今天的新聞裡挑／貼網址／貼全文 → AI 分析 → 做成教材
 //
-// ── 為什麼這裡沒有「AI 推薦文章」 ──────────────────────────
+// ── AI 推薦為什麼不會推薦出不存在的文章 ────────────────────
 //
-// 跟影片同一個理由：模型記不住哪篇文章存在、標題叫什麼、在哪個網站。
-// 推薦一篇不存在的文章比不推薦更糟。真實素材只能來自真實來源——
-// 使用者貼網址（Worker 抓一次），或直接貼全文。
+// 模型記不住哪篇文章存在，憑記憶推薦就會得到點下去 404 的東西。
+// 所以推薦分兩步：Worker 先從各家新聞的 RSS 抓回今天真的存在的標題，
+// 模型只負責**從清單裡挑**、用索引回答；索引超出範圍的在驗證時就丟掉。
+// 畫面上的標題與網址都來自 RSS，不是模型寫的，點下去一定是那篇。
 //
 // ── 為什麼真實文章值得一條獨立通道 ────────────────────────
 //
@@ -21,16 +22,70 @@ import {
   createArticle,
   deleteArticle,
   fetchArticle,
+  fetchFeeds,
   listArticles,
+  suggestArticles,
   type ArticleMiss,
+  type FeedSource,
+  type ResolvedArticlePick,
 } from '../lib/articleService'
 import { ARTICLE_MAX_CHARS, ARTICLE_MIN_CHARS } from '../lib/prompts/article'
 import { ClaudeError } from '../lib/claude'
 import ErrorNote from '../components/ErrorNote'
 import { isTaskLanguage, type Article, type TaskLanguage } from '../lib/types'
 
+/** 幾個起步用的主題，省掉「要填什麼」的猶豫 */
+const TOPIC_HINTS = ['科技', '科學', '生活', '健康', '文化', '商業']
+
+/** 1-5 的難度畫成五個點。以學習者的程度為基準，不是絕對難度 */
+function Difficulty({ value }: { value: number }) {
+  const n = Math.max(1, Math.min(5, Math.round(value)))
+  return (
+    <span className="flex items-center gap-1 text-xs text-slate-500">
+      難度
+      <span className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= n ? 'bg-amber-500' : 'bg-slate-200'}`} />
+        ))}
+      </span>
+    </span>
+  )
+}
+
+/** 一篇推薦。標題與來源都是 RSS 原文，why／caution／difficulty 才是 AI 的判斷 */
+export function PickCard({
+  pick,
+  busy,
+  opening,
+  onOpen,
+}: {
+  pick: ResolvedArticlePick
+  busy: boolean
+  opening: boolean
+  onOpen: () => void
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+      <p className="font-bold leading-snug">{pick.title}</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-xs text-slate-400">{pick.source}</span>
+        <Difficulty value={pick.difficulty} />
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-slate-600">{pick.why}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-amber-700">⚠️ {pick.caution}</p>
+      <button
+        onClick={onOpen}
+        disabled={busy}
+        className="mt-3 w-full rounded-xl bg-teal-50 py-3 font-bold text-teal-700 disabled:opacity-60"
+      >
+        {opening ? '抓全文中…' : '讀這篇'}
+      </button>
+    </div>
+  )
+}
+
 /**
- * 找素材的起點。刻意只列「能合法自由使用」與「好找」的來源，
+ * 自己找素材的起點。刻意只列「能合法自由使用」與「好找」的來源，
  * 而且標出各自的坑——沒有缺點的素材不存在。
  */
 const SOURCE_HINTS: Record<TaskLanguage, Array<{ name: string; note: string }>> = {
@@ -73,6 +128,14 @@ export default function ArticleHome() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [building, setBuilding] = useState(false)
 
+  const [topic, setTopic] = useState('')
+  const [picks, setPicks] = useState<ResolvedArticlePick[] | null>(null)
+  const [recommending, setRecommending] = useState(false)
+  /** 各新聞來源今天抓不抓得到。有掛掉的要照實說，不然只會覺得推薦怎麼都同一家 */
+  const [sources, setSources] = useState<FeedSource[]>([])
+  /** 正在抓哪一篇推薦文章的全文（按鈕要顯示轉圈的是哪一張卡） */
+  const [opening, setOpening] = useState<string | null>(null)
+
   useEffect(() => {
     if (!profile) return
     let alive = true
@@ -98,18 +161,53 @@ export default function ArticleHome() {
   const mine = useMemo(() => (articles ?? []).filter((a) => a.language === language), [articles, language])
   const elsewhere = useMemo(() => (articles ?? []).length - mine.length, [articles, mine])
 
-  async function grab() {
-    if (fetching || !urlInput.trim()) return
+  async function grab(url = urlInput.trim(), fallbackTitle = '') {
+    if (fetching || !url) return
     setFetching(true)
     setMiss(null)
     setErrorMsg('')
-    const result = await fetchArticle(urlInput.trim())
+    const result = await fetchArticle(url)
     if ('text' in result) {
-      setDraft({ title: result.title, text: result.text, sourceUrl: urlInput.trim() })
+      // RSS 的標題比網頁 <title> 乾淨（不帶站名），從推薦進來的優先用它
+      setDraft({ title: fallbackTitle || result.title, text: result.text, sourceUrl: url })
     } else {
       setMiss(result.miss)
+      // 推薦進來卻抓不到全文：把網址留在輸入框，讓使用者知道是哪一篇、可以自己去複製
+      if (fallbackTitle) setUrlInput(url)
     }
     setFetching(false)
+  }
+
+  /** 兩步：先抓今天真的存在的新聞清單，再請 AI 從裡面挑 */
+  async function recommend() {
+    if (!profile || recommending) return
+    setRecommending(true)
+    setErrorMsg('')
+    setMiss(null)
+    try {
+      const feeds = await fetchFeeds(language)
+      setSources(feeds.sources)
+      if ('failed' in feeds) {
+        setPicks(null)
+        setErrorMsg(
+          '今天的新聞清單抓不到（每一家都連不上）。可以先用下面「貼網址」或「直接貼內容」，' +
+            '或等一下再試。',
+        )
+        return
+      }
+      const list = await suggestArticles(language, profile.level, feeds.items, topic, profile.interests ?? null)
+      setPicks(list)
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof ClaudeError ? e : `推薦失敗：${String((e as Error).message)}`)
+    } finally {
+      setRecommending(false)
+    }
+  }
+
+  async function openPick(p: ResolvedArticlePick) {
+    setOpening(p.link)
+    await grab(p.link, p.title)
+    setOpening(null)
   }
 
   async function build() {
@@ -243,7 +341,11 @@ export default function ArticleHome() {
           {learnable.map((l) => (
             <button
               key={l}
-              onClick={() => setLanguage(l)}
+              onClick={() => {
+                setLanguage(l)
+                setPicks(null)
+                setSources([])
+              }}
               className={`rounded-full px-5 py-2 text-sm font-semibold ${
                 language === l ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 shadow-sm'
               }`}
@@ -292,33 +394,99 @@ export default function ArticleHome() {
         </p>
       )}
 
+      {/* AI 推薦：先抓今天真的存在的新聞，再請 AI 從裡面挑——不可能推薦出不存在的文章 */}
       <section className="mt-6">
-        <label className="block px-1 text-sm font-semibold text-slate-600" htmlFor="article-url">
-          貼一篇文章的網址
+        <label className="block px-1 text-sm font-semibold text-slate-600" htmlFor="article-topic">
+          想讀什麼主題？（可以不填）
         </label>
         <input
-          id="article-url"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="https://…"
-          className="mt-1 w-full rounded-xl border border-slate-300 p-3 text-sm"
+          id="article-topic"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="例如：AI、氣候、運動"
+          className="mt-1 w-full rounded-xl border border-slate-300 p-3"
         />
+        <div className="mt-2 flex flex-wrap gap-2">
+          {TOPIC_HINTS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTopic(topic === t ? '' : t)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+                topic === t ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 shadow-sm ring-1 ring-slate-200/60'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
         <button
-          onClick={() => void grab()}
-          disabled={fetching || !urlInput.trim()}
-          className="mt-3 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white disabled:opacity-60"
+          onClick={() => void recommend()}
+          disabled={recommending}
+          className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-lg font-bold text-white disabled:opacity-60"
         >
-          {fetching ? '抓取中…' : '抓這一篇 📄'}
+          {recommending ? '正在讀今天的新聞，約需 15 秒…' : picks ? '換一批推薦' : '從今天的新聞推薦給我 📰'}
         </button>
 
+        {/* 有來源掛掉就照實說。RSS 網址偶爾會改，不講的話只會覺得推薦怎麼都是同一家 */}
+        {sources.some((src) => !src.ok) && (
+          <p className="mt-2 px-1 text-xs leading-relaxed text-slate-400">
+            今天抓不到：{sources.filter((src) => !src.ok).map((src) => src.name).join('、')}。
+            {sources.some((src) => src.ok) && '推薦只從其他幾家挑。'}
+          </p>
+        )}
+
+        {picks && (
+          <>
+            <p className="mt-4 px-1 text-xs leading-relaxed text-slate-500">
+              這些都是今天真的刊出的文章——AI 只負責從清單裡挑，標題與網址都來自新聞網站本身。
+              難度以你的程度 {profile.level} 為基準。
+            </p>
+            <div className="mt-3 grid gap-3">
+              {picks.map((p) => (
+                <PickCard
+                  key={p.link}
+                  pick={p}
+                  busy={fetching}
+                  opening={opening === p.link}
+                  onOpen={() => void openPick(p)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="mt-6">
+        {/* 失敗訊息放在這一區最上面：從推薦卡點進來抓不到時，它就緊貼在卡片下方，看得到 */}
         {miss && (
-          <div className="mt-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/70">
+          <div className="mb-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/70">
             {ARTICLE_MISS_NOTE[miss]}
             <span className="mt-1 block text-xs text-amber-800/80">
-              直接把內文選取複製，用下面那個按鈕貼進來就好。
+              打開下面那個網址，把內文選取複製，用「直接貼文章內容」貼進來就好。
             </span>
           </div>
         )}
+
+        <label className="block px-1 text-sm font-semibold text-slate-600" htmlFor="article-url">
+          或者，貼一篇你自己找的
+        </label>
+        <div className="mt-1 flex gap-2">
+          <input
+            id="article-url"
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            placeholder="https://…"
+            className="min-w-0 flex-1 rounded-xl border border-slate-300 p-3 text-sm"
+          />
+          <button
+            onClick={() => void grab()}
+            disabled={fetching || !urlInput.trim()}
+            className="shrink-0 rounded-xl bg-white px-4 font-semibold text-teal-700 shadow-sm ring-1 ring-slate-200/60 disabled:opacity-50"
+          >
+            {fetching && !opening ? '抓取中…' : '抓取'}
+          </button>
+        </div>
 
         <button
           onClick={() => setDraft({ title: '', text: '', sourceUrl: '' })}
@@ -329,16 +497,15 @@ export default function ArticleHome() {
       </section>
 
       <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
-        <h3 className="font-bold text-slate-800">不知道讀什麼？</h3>
+        <h3 className="font-bold text-slate-800">想自己找的話</h3>
         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-          這裡不做 AI 推薦——模型記不住哪篇文章真的存在，推薦一篇找不到的比不推薦更糟。
-          下面是幾個好找的起點，各自的坑也寫了
+          推薦只會從固定幾家新聞挑。想讀別的，這幾個是好找的起點，各自的坑也寫了
         </p>
         <ul className="mt-3 space-y-2.5">
-          {SOURCE_HINTS[language].map((s) => (
-            <li key={s.name}>
-              <p className="text-sm font-semibold text-slate-700">{s.name}</p>
-              <p className="text-xs leading-relaxed text-slate-500">{s.note}</p>
+          {SOURCE_HINTS[language].map((h) => (
+            <li key={h.name}>
+              <p className="text-sm font-semibold text-slate-700">{h.name}</p>
+              <p className="text-xs leading-relaxed text-slate-500">{h.note}</p>
             </li>
           ))}
         </ul>
