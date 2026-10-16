@@ -20,9 +20,10 @@ import {
   listVideos,
   resolvePicks,
   suggestSearches,
+  AI_TRANSCRIBE_NOTE,
   TRANSCRIPT_MISS_NOTE,
   type FetchedTranscript,
-  type TranscriptMiss,
+  type TranscriptMissResult,
 } from '../lib/videoService'
 import { parseYouTubeId } from '../lib/songService'
 import { TRANSCRIPT_MAX_CHARS, TRANSCRIPT_MIN_CHARS, type VideoPick } from '../lib/prompts/video'
@@ -158,7 +159,7 @@ export default function VideoHome() {
   const [transcript, setTranscript] = useState('')
   const [building, setBuilding] = useState(false)
   /** 自動試抓的結果：還沒試是 null，抓到是逐字稿，抓不到帶原因 */
-  const [fetched, setFetched] = useState<FetchedTranscript | { miss: TranscriptMiss } | null>(null)
+  const [fetched, setFetched] = useState<FetchedTranscript | TranscriptMissResult | null>(null)
   const [fetching, setFetching] = useState(false)
   const [showTool, setShowTool] = useState(false)
 
@@ -352,11 +353,11 @@ export default function VideoHome() {
             disabled={fetching}
             className="mt-3 w-full rounded-xl bg-white py-3 font-semibold text-teal-700 shadow-sm ring-1 ring-slate-200/60 disabled:opacity-60"
           >
-            {fetching ? '試抓中…' : fetched === null ? '自動抓逐字稿' : '再試一次'}
+            {fetching ? '抓取中（字幕抓不到時改由 AI 聽寫，最多約 40 秒）…' : fetched === null ? '自動抓逐字稿' : '再試一次'}
           </button>
         )}
 
-        {fetched && 'text' in fetched && (
+        {fetched && 'text' in fetched && fetched.source === 'youtube' && (
           <div className="mt-3 rounded-2xl bg-teal-50 p-4 text-sm leading-relaxed text-teal-900 ring-1 ring-teal-200/70">
             抓到了{fetched.auto ? '（自動辨識的字幕）' : '（人工上傳的字幕）'}。
             <span className="mt-1 block text-xs text-teal-800/80">
@@ -366,12 +367,26 @@ export default function VideoHome() {
           </div>
         )}
 
+        {/* AI 聽寫的要明講：它是聽實際音訊寫的（不是憑記憶編的），但會聽錯字，
+            跟 YouTube 自動字幕同一個性質。對著影片掃一眼是最後一道防線 */}
+        {fetched && 'text' in fetched && fetched.source === 'ai' && (
+          <div className="mt-3 rounded-2xl bg-teal-50 p-4 text-sm leading-relaxed text-teal-900 ring-1 ring-teal-200/70">
+            影片字幕抓不到，改由 AI 聽寫（Google Gemini）。
+            <span className="mt-1 block text-xs text-teal-800/80">
+              是聽影片的實際聲音寫的，但可能有聽錯的字。對著上面的影片掃一眼，
+              不對的地方直接在下面改。時間戳是 AI 估的，逐句播放可能差個一兩秒。
+            </span>
+          </div>
+        )}
+
         {fetched && 'miss' in fetched && (
           <div className="mt-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/70">
             自動抓不到：{TRANSCRIPT_MISS_NOTE[fetched.miss]}
+            {fetched.ai && <span className="mt-1.5 block">{AI_TRANSCRIBE_NOTE[fetched.ai]}</span>}
             <span className="mt-1 block text-xs text-amber-800/80">
-              這是預料中的——YouTube 兩年前就把字幕鎖起來了，伺服器抓得到算運氣好。
-              照下面的步驟貼上就行，或用那個一鍵小工具。
+              {fetched.ai === 'not_configured'
+                ? '開之前，照下面的步驟貼上就行，或用那個一鍵小工具。'
+                : '照下面的步驟貼上就行，或用那個一鍵小工具。'}
             </span>
           </div>
         )}

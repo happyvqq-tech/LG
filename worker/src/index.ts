@@ -6,6 +6,7 @@
 import { isPromptModule, resolvePrompt, type ModelRequestOptions } from './prompts'
 import { extractArticle } from './articleExtract'
 import { mergeFeeds, parseFeed, type FeedItem } from './rss'
+import { GEMINI_MODELS, transcribeWithGemini } from './geminiTranscribe'
 import {
   extractCaptionTracks,
   json3ToPanelText,
@@ -33,6 +34,16 @@ export interface Env {
    * 多勾一個 YouTube Data API v3 即可，不必另外開一把。
    */
   YOUTUBE_API_KEY?: string
+  /**
+   * Google Gemini API（影片逐字稿的第二層：讓 AI 直接聽影片，見 geminiTranscribe.ts）。
+   * 選配——沒設就跟以前一樣，抓不到字幕時請使用者自己貼。
+   * 可以沿用 GCP 上那把 Google 金鑰，在金鑰的 API 限制裡多勾 Generative Language API；
+   * 那個專案有綁帳單，所以走付費額度（每支影片不到一塊台幣，內容不會被拿去訓練）。
+   * 也可以在 Google AI Studio 另開一把免費的（每天 8 小時影片，但內容可能被拿去改善產品）。
+   */
+  GEMINI_API_KEY?: string
+  /** 選配：指定 Gemini 模型名稱，會排在內建清單前面先試 */
+  GEMINI_MODEL?: string
 }
 
 interface ChatRequestBody {
@@ -113,7 +124,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 20
+const WORKER_VERSION = 21
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -758,11 +769,65 @@ async function handleTranscript(request: Request, env: Env, origin: string): Pro
     return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
   }
 
-  function miss(reason: TranscriptMiss, status = 404): Response {
-    // 刻意不快取失敗：擋 IP 跟 PO token 都可能是一時的，
-    // 快取起來等於把一次壞運氣變成一個月都抓不到
-    return jsonResponse({ error: 'transcript_not_found', reason }, status, origin)
+  // 失敗刻意不快取：擋 IP 跟 PO token 都可能是一時的，
+  // 快取起來等於把一次壞運氣變成一個月都抓不到
+  async function succeed(payload: Record<string, unknown>): Promise<Response> {
+    const json = JSON.stringify(payload)
+    await cache.put(
+      cacheRequest,
+      new Response(json, {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=2592000' },
+      }),
+    )
+    return new Response(json, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
+    })
   }
+
+  // 第一層：免費試抓 YouTube 自己的字幕檔。抓得到最好（可能是人工字幕，而且瞬間就好）
+  const scraped = await scrapeCaptions(videoId, wanted)
+  if (scraped.ok) {
+    return succeed({ text: scraped.text, lang: scraped.lang, auto: scraped.auto, source: 'youtube' })
+  }
+
+  // 第二層：讓 Gemini 直接聽影片（見 geminiTranscribe.ts）。選配——沒設金鑰就停在這裡
+  if (!env.GEMINI_API_KEY) {
+    return jsonResponse(
+      { error: 'transcript_not_found', reason: scraped.reason, ai: 'not_configured' },
+      scraped.status,
+      origin,
+    )
+  }
+  // 這一層會花錢（很少，但不是零）也比較慢，限流比第一層緊
+  if (isRateLimited(ip, 'transcript-ai', 6)) {
+    return jsonResponse({ error: 'rate_limited', message: 'AI 聽寫太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+  const models = env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...GEMINI_MODELS] : GEMINI_MODELS
+  const heard = await transcribeWithGemini({
+    videoId,
+    language: body.language ?? '',
+    apiKey: env.GEMINI_API_KEY,
+    models,
+  })
+  if (heard.ok) {
+    return succeed({ text: heard.text, lang: wanted, auto: true, source: 'ai', model: heard.model })
+  }
+  return jsonResponse(
+    { error: 'transcript_not_found', reason: scraped.reason, ai: heard.reason, ai_detail: heard.detail },
+    502,
+    origin,
+  )
+}
+
+type ScrapeResult =
+  | { ok: true; text: string; lang: string; auto: boolean }
+  | { ok: false; reason: TranscriptMiss; status: number }
+
+/** 第一層：去 youtube.com 挖字幕檔。常被擋，理由見 handleTranscript 上方的說明 */
+async function scrapeCaptions(videoId: string, wanted: string): Promise<ScrapeResult> {
+  const miss = (reason: TranscriptMiss, status = 404): ScrapeResult => ({ ok: false, reason, status })
 
   const browserish = {
     'user-agent':
@@ -806,22 +871,7 @@ async function handleTranscript(request: Request, env: Env, origin: string): Pro
   const text = json3ToPanelText(raw).slice(0, 20000)
   if (!text) return miss('empty')
 
-  const payload = JSON.stringify({
-    text,
-    lang: track.languageCode ?? '',
-    auto: track.kind === 'asr',
-  })
-  await cache.put(
-    cacheRequest,
-    new Response(payload, {
-      status: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'max-age=2592000' },
-    }),
-  )
-  return new Response(payload, {
-    status: 200,
-    headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
-  })
+  return { ok: true, text, lang: track.languageCode ?? '', auto: track.kind === 'asr' }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1084,6 +1134,10 @@ export default {
             youtube_key: env.YOUTUBE_API_KEY
               ? `已設定（${env.YOUTUBE_API_KEY.length} 字元）`
               : '（未設定，歌曲模組會請你自己貼 YouTube 連結）',
+            // 影片逐字稿的 AI 聽寫；沒設只是抓不到字幕時要自己貼
+            gemini_key: env.GEMINI_API_KEY
+              ? `已設定（${env.GEMINI_API_KEY.length} 字元）`
+              : '（未設定，影片字幕抓不到時要自己貼）',
           },
           null,
           2,

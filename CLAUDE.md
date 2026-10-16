@@ -37,7 +37,7 @@
 | 原曲／影片 | YouTube 官方嵌入（不代管任何影音檔）。影片以 YouTube Data API v3 搜尋，經 Worker `/api/youtube`；沒設金鑰時改請使用者貼一次連結 |
 | 文章推薦 | 各語言幾家新聞的 RSS，經 Worker `/api/feeds` 合併並快取 30 分鐘（清單在 `worker/src/index.ts` 的 `FEEDS`，某家失效改那裡再 deploy 就好）。AI 只從這份真實清單裡**用索引挑**，不憑記憶推薦 |
 | 文章 | 使用者貼網址或全文。網址經 Worker `/api/article` 抓一次並抽出本文（純函式在 `worker/src/articleExtract.ts`），抓不到就請使用者貼；AI 只分析不重打原文 |
-| 影片逐字稿 | 三層：Worker `/api/transcript` 盡力試抓 → 書籤小工具（在 YouTube 頁面上讀已渲染的轉錄稿面板，100% 可靠）→ 使用者手動貼上。沒有可靠的免費自動來源，理由見 `worker/src/index.ts` 的 `handleTranscript` |
+| 影片逐字稿 | Worker `/api/transcript` 先免費試抓影片自己的字幕（常被擋）→ 抓不到時改由 **Google Gemini API 直接聽影片**轉寫（選配，需 `GEMINI_API_KEY`，見 `worker/src/geminiTranscribe.ts`）→ 書籤小工具 → 使用者手動貼上 |
 
 ## 3. 架構
 
@@ -49,7 +49,7 @@
    ├── fetch ──→ Cloudflare Worker /api/tts  ──→ tts.api.yating.tw（台語語音，含快取）
    ├── fetch ──→ Cloudflare Worker /api/lyrics ──→ lrclib.net（歌詞＋逐句時間戳，含快取）
    ├── fetch ──→ Cloudflare Worker /api/youtube ──→ YouTube Data API（找原曲與學習影片，含快取）
-   ├── fetch ──→ Cloudflare Worker /api/transcript ──→ youtube.com（盡力試抓字幕，常失敗，含快取）
+   ├── fetch ──→ Cloudflare Worker /api/transcript ──→ youtube.com 試抓字幕；失敗時 → Gemini API 聽影片（含快取）
    ├── fetch ──→ Cloudflare Worker /api/article ──→ 任意公開網頁（抽出本文，含快取與內網防護）
    └── fetch ──→ Cloudflare Worker /api/feeds ──→ 各家新聞 RSS（今天的標題清單，含快取）
                      （API key 存在 Worker 環境變數，絕不出現在前端程式碼）
@@ -66,6 +66,7 @@
 │   ├── src/youtubeCaptions.ts  # YouTube 字幕解析（純函式，網路那段在 index.ts）
 │   ├── src/articleExtract.ts   # 網頁 HTML 抽出本文（純函式，同上）
 │   ├── src/rss.ts              # RSS／Atom 解析與多來源輪流合併（純函式）
+│   ├── src/geminiTranscribe.ts # 影片逐字稿第二層：Gemini 聽影片轉寫（模型逐一嘗試、輸出整理）
 │   ├── src/prompts/        # 全部 15 個 system prompt 與模型選擇（見第 6 節）
 │   └── wrangler.toml
 ├── src/
@@ -161,7 +162,15 @@
   他會一直找不到教材在講哪一句
 - **逐字稿跟歌詞一樣絕不讓模型生成**，理由相同（見下）。自動辨識的稿子有錯字是真實情況，
   prompt 明令照抄、不准「修正」
-- **逐字稿沒有可靠的免費自動來源，這是已經查證過的結論，不要再換個套件重試一次**：
+- **2026-10 新增 AI 聽寫（使用者要求，選配）**：字幕抓不到時，把影片網址交給 Google Gemini API，
+  由 Google 自己的服務去讀 YouTube、聽音訊寫出逐字稿。這是官方支援的用法（公開影片），
+  不是爬蟲，所以不會被擋。它**不違反**下面「逐字稿絕不讓模型生成」——那條擋的是**憑記憶**寫，
+  這裡是**聽實際音訊**轉寫，性質跟 YouTube 自動字幕一樣（會聽錯字但不會捏造），
+  所以同樣要先給使用者看過、畫面明講是 AI 聽寫的。prompt 第一條是**逐字、保留填充詞與口誤**——
+  模型很愛順手修乾淨，但影片教材教的正是那些。只聽前六分鐘（教材只取 8-15 行），
+  每支約 NT$0.5 以內（綁帳單的 GCP 金鑰）或免費（AI Studio 金鑰，每天 8 小時，內容可能被拿去改善產品）。
+  這是 Anthropic 以外唯一的 AI 供應商，只用在這一件 Claude 做不到的事（Claude 不能聽影片）
+- **硬抓字幕檔沒有可靠的免費方法，這是已經查證過的結論，不要再換個套件重試一次**：
   官方 `captions.download` 只有影片擁有者能呼叫；非官方的 `timedtext` 卡 PO token
   （字幕網址帶 `exp=xpe` 就只回空內容，token 要 BotGuard 挑戰才算得出來）與機房 IP 封鎖
   （Cloudflare／AWS／GCP 的 IP 收到「Sign in to confirm you're not a bot」）；
@@ -323,6 +332,8 @@ prompt 設計，React 元件反而是通用零件。搬到 Worker 之後瀏覽�
 | Worker | `GOOGLE_TTS_API_KEY` | wrangler secret，英日韓語音；沒設會自動退回瀏覽器內建語音，不會壞掉 |
 | Worker | `ACCESS_PASSPHRASE` | wrangler secret，選配；沒設就是預設狀態（任何人拿到網址都能用），見 `ACCESS_GATE_MEMO.md` |
 | Worker | `YOUTUBE_API_KEY` | wrangler secret，**選配**；歌曲模組用來找原曲，影片模組用來把搜尋方向變成真實影片。沒設只是要自己貼一次 YouTube 連結。可沿用 GCP 上那把 Google 金鑰，只要在金鑰的 API 限制裡多勾 YouTube Data API v3 |
+| Worker | `GEMINI_API_KEY` | wrangler secret，**選配**；影片字幕抓不到時改由 Gemini 聽影片轉寫。沒設只是要自己貼逐字稿。可沿用 GCP 那把 Google 金鑰（在 API 限制裡多勾 Generative Language API），或在 Google AI Studio 另開免費的 |
+| Worker | `GEMINI_MODEL` | 選配；指定 Gemini 模型名稱，排在內建清單（`GEMINI_MODELS`）前面先試 |
 | Worker | `ALLOWED_ORIGIN` | GitHub Pages 網址，CORS 白名單 |
 | 前端 `.env` | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase 連線 |
 | 前端 `.env` | `VITE_WORKER_URL` | Worker 端點 |

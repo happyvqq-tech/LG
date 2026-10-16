@@ -86,12 +86,26 @@ export async function resolvePicks(picks: VideoPick[]): Promise<ResolvedPick[]> 
 /** 自動抓逐字稿失敗的原因，每一種的說明不一樣——全部變成「抓不到」等於沒講 */
 export type TranscriptMiss = 'blocked' | 'po_token' | 'no_captions' | 'empty' | 'unreachable'
 
+/**
+ * 第二層（AI 聽寫）的狀態。not_configured＝Worker 沒設 GEMINI_API_KEY，
+ * 其他是設了但這次失敗的原因。
+ */
+export type AiTranscribeStatus = 'not_configured' | 'no_speech' | 'unusable' | 'quota' | 'key_rejected' | 'failed'
+
 export interface FetchedTranscript {
   /** 跟 YouTube 轉錄稿面板同格式（時間一行、內容一行） */
   text: string
   lang: string
   /** 自動辨識的字幕（會有錯字，但那是真實情況，教材不會幫它亂改） */
   auto: boolean
+  /** youtube＝抓到影片自己的字幕；ai＝Gemini 聽影片寫出來的 */
+  source: 'youtube' | 'ai'
+}
+
+export interface TranscriptMissResult {
+  miss: TranscriptMiss
+  /** 沒走到第二層（舊版 Worker）時為 null */
+  ai: AiTranscribeStatus | null
 }
 
 export const TRANSCRIPT_MISS_NOTE: Record<TranscriptMiss, string> = {
@@ -102,18 +116,28 @@ export const TRANSCRIPT_MISS_NOTE: Record<TranscriptMiss, string> = {
   unreachable: '連不上 YouTube，等一下再試一次。',
 }
 
+/** AI 聽寫失敗時的白話說明；not_configured 給的是「怎麼開」而不是「哪裡壞」 */
+export const AI_TRANSCRIBE_NOTE: Record<AiTranscribeStatus, string> = {
+  not_configured:
+    '還沒開 AI 聽寫。在 Cloudflare 的 Worker 設定裡加上 GEMINI_API_KEY，之後字幕抓不到時就會自動改用 AI 聽寫。',
+  no_speech: 'AI 聽完了，但這支影片裡沒有人在講話。',
+  unusable: 'AI 聽寫出來的東西不像逐字稿（比較像摘要），沒辦法拿來做逐句精聽。換一支或再試一次。',
+  quota: '今天的 AI 聽寫額度用完了，明天會恢復。',
+  key_rejected:
+    'Gemini 拒絕了這把金鑰。到 Google Cloud 確認金鑰的 API 限制有勾 Generative Language API，或改用 AI Studio 開的金鑰。',
+  failed: 'AI 聽寫這次沒成功，等一下再試一次。',
+}
+
 /**
- * 盡力試抓一次逐字稿。
- *
- * **預期常常失敗，而且那沒關係**：抓不到就退回請使用者貼上，
- * 跟沒有這支功能一模一樣。詳細理由見 worker/src/index.ts 的 handleTranscript。
+ * 抓逐字稿：Worker 先免費試抓影片自己的字幕，抓不到且有設 Gemini 金鑰時，
+ * 改讓 AI 直接聽影片（最多約 40 秒）。兩層都不行才退回請使用者貼上。
  */
 export async function fetchTranscript(
   videoId: string,
   language: TaskLanguage,
-): Promise<FetchedTranscript | { miss: TranscriptMiss }> {
+): Promise<FetchedTranscript | TranscriptMissResult> {
   const base = import.meta.env.VITE_WORKER_URL?.replace(/\/$/, '')
-  if (!base) return { miss: 'unreachable' }
+  if (!base) return { miss: 'unreachable', ai: null }
 
   // 這支不共用 songService 的 postWorker：那支失敗時只回 null，
   // 而這裡失敗的「原因」正是要給使用者看的東西（擋 IP／沒字幕／要簽章
@@ -132,16 +156,30 @@ export async function fetchTranscript(
       text?: string
       lang?: string
       auto?: boolean
+      source?: string
       reason?: string
+      ai?: string
     } | null
 
-    if (res.ok && data?.text) return { text: data.text, lang: data.lang ?? '', auto: data.auto === true }
+    if (res.ok && data?.text) {
+      return {
+        text: data.text,
+        lang: data.lang ?? '',
+        auto: data.auto === true,
+        source: data.source === 'ai' ? 'ai' : 'youtube',
+      }
+    }
 
     const known: TranscriptMiss[] = ['blocked', 'po_token', 'no_captions', 'empty', 'unreachable']
+    const knownAi: AiTranscribeStatus[] = ['not_configured', 'no_speech', 'unusable', 'quota', 'key_rejected', 'failed']
     const reason = data?.reason
-    return { miss: known.includes(reason as TranscriptMiss) ? (reason as TranscriptMiss) : 'unreachable' }
+    const ai = data?.ai
+    return {
+      miss: known.includes(reason as TranscriptMiss) ? (reason as TranscriptMiss) : 'unreachable',
+      ai: knownAi.includes(ai as AiTranscribeStatus) ? (ai as AiTranscribeStatus) : null,
+    }
   } catch {
-    return { miss: 'unreachable' }
+    return { miss: 'unreachable', ai: null }
   }
 }
 
