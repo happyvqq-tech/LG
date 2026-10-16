@@ -39,9 +39,10 @@ export type GeminiResult = GeminiOk | GeminiFail
 /**
  * 依序嘗試的模型。第一個 404（模型不存在或已下架）就換下一個——
  * Gemini 的模型名稱變動很快，寫死一個會在某天無聲無息地壞掉。
+ * 最後一個是別名（永遠指向當下最新的 Flash），前兩個被下架時還有它接著。
  * 可以用 Worker 環境變數 GEMINI_MODEL 指定，指定的會排在最前面。
  */
-export const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-3-flash-preview']
+export const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-flash-latest']
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 
