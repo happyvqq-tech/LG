@@ -106,6 +106,8 @@ export interface TranscriptMissResult {
   miss: TranscriptMiss
   /** 沒走到第二層（舊版 Worker）時為 null */
   ai: AiTranscribeStatus | null
+  /** Gemini 那邊失敗的技術細節（狀態碼與回應片段）。使用者看不懂，但貼給開發者就查得到原因 */
+  aiDetail: string | null
 }
 
 export const TRANSCRIPT_MISS_NOTE: Record<TranscriptMiss, string> = {
@@ -137,7 +139,7 @@ export async function fetchTranscript(
   language: TaskLanguage,
 ): Promise<FetchedTranscript | TranscriptMissResult> {
   const base = import.meta.env.VITE_WORKER_URL?.replace(/\/$/, '')
-  if (!base) return { miss: 'unreachable', ai: null }
+  if (!base) return { miss: 'unreachable', ai: null, aiDetail: null }
 
   // 這支不共用 songService 的 postWorker：那支失敗時只回 null，
   // 而這裡失敗的「原因」正是要給使用者看的東西（擋 IP／沒字幕／要簽章
@@ -159,6 +161,7 @@ export async function fetchTranscript(
       source?: string
       reason?: string
       ai?: string
+      ai_detail?: string
     } | null
 
     if (res.ok && data?.text) {
@@ -177,9 +180,10 @@ export async function fetchTranscript(
     return {
       miss: known.includes(reason as TranscriptMiss) ? (reason as TranscriptMiss) : 'unreachable',
       ai: knownAi.includes(ai as AiTranscribeStatus) ? (ai as AiTranscribeStatus) : null,
+      aiDetail: typeof data?.ai_detail === 'string' ? data.ai_detail : null,
     }
   } catch {
-    return { miss: 'unreachable', ai: null }
+    return { miss: 'unreachable', ai: null, aiDetail: null }
   }
 }
 

@@ -383,6 +383,12 @@ export default function VideoHome() {
           <div className="mt-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/70">
             自動抓不到：{TRANSCRIPT_MISS_NOTE[fetched.miss]}
             {fetched.ai && <span className="mt-1.5 block">{AI_TRANSCRIBE_NOTE[fetched.ai]}</span>}
+            {/* 技術細節給開發者看：「沒成功」四個字查不出原因，但 Gemini 回的狀態碼與錯誤片段可以 */}
+            {fetched.aiDetail && (
+              <span className="mt-1.5 block break-words rounded-lg bg-amber-100/70 p-2 font-mono text-[11px] leading-snug text-amber-900/80">
+                {fetched.aiDetail}
+              </span>
+            )}
             <span className="mt-1 block text-xs text-amber-800/80">
               {fetched.ai === 'not_configured'
                 ? '開之前，照下面的步驟貼上就行，或用那個一鍵小工具。'
