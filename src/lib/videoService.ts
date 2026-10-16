@@ -62,25 +62,98 @@ export async function suggestSearches(
 }
 
 export interface ResolvedPick extends VideoPick {
-  /** 搜到的真實影片；沒設 YOUTUBE_API_KEY 或搜不到時為 null */
+  /** 搜到的真實影片；沒設 YOUTUBE_API_KEY 或搜不到能播的時為 null */
   videoId: string | null
   videoTitle: string | null
+  durationSec: number | null
 }
 
 /**
- * 把搜尋方向變成真實存在的影片。
+ * 把搜尋方向變成真實存在、**而且在 App 裡播得出來**的影片。
  *
- * 搜不到不是錯誤：沒設 YOUTUBE_API_KEY 的部署一律回 null，
- * 畫面會改成給一個 YouTube 搜尋連結讓使用者自己挑——
- * 自己挑其實更好，因為他看得到縮圖與長度。
+ * Worker 會先在搜尋時擋掉不能嵌入、台灣看不到的，再逐支確認年齡限制與長度
+ * （見 worker/src/youtubeFilter.ts）。搜不到能播的不是錯誤：畫面會改成給一個
+ * YouTube 搜尋連結讓使用者自己挑。
  */
-export async function resolvePicks(picks: VideoPick[]): Promise<ResolvedPick[]> {
-  const found = await Promise.all(picks.map((p) => findVideoByQuery(p.query)))
+export async function resolvePicks(picks: VideoPick[], language: TaskLanguage): Promise<ResolvedPick[]> {
+  const found = await Promise.all(picks.map((p) => findVideoByQuery(p.query, { kind: 'video', language })))
   return picks.map((p, i) => ({
     ...p,
     videoId: found[i]?.videoId ?? null,
     videoTitle: found[i]?.videoTitle ?? null,
+    durationSec: found[i]?.durationSec ?? null,
   }))
+}
+
+/**
+ * 沒有 YOUTUBE_API_KEY 時給使用者的搜尋連結，帶上 YouTube 自己的篩選：
+ * 4-20 分鐘（擋掉 Shorts 與一小時的直播存檔）＋有字幕。
+ *
+ * sp 是 YouTube 搜尋頁篩選器的編碼（protobuf 再 base64）：
+ *   欄位 2 是篩選器本身，裡面 欄位 3＝長度（3＝4-20 分鐘）、欄位 5＝字幕（1＝有）
+ *   → bytes 12 04 18 03 28 01 → "EgQYAygB"
+ * 「能不能嵌入」YouTube 的搜尋頁沒有篩選器可用，那一項只能靠貼上之後的檢查。
+ * 手機上的 YouTube App 有時會忽略這個參數，那就只是退回普通搜尋，不會壞。
+ */
+export const YOUTUBE_FILTER_SP = 'EgQYAygB'
+
+export function youtubeSearchUrl(query: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=${YOUTUBE_FILTER_SP}`
+}
+
+/** 播不出來或不適合做教材的原因（跟 worker/src/youtubeFilter.ts 的 PlayProblem 一致） */
+export type PlayProblem = 'embed_disabled' | 'not_public' | 'age_restricted' | 'region_blocked' | 'too_short' | 'too_long'
+
+export const PLAY_PROBLEM_NOTE: Record<PlayProblem, string> = {
+  embed_disabled: '這支影片的作者關掉了「允許在其他網站播放」，App 裡會聽不到。',
+  not_public: '這支影片不是公開影片（或已經被刪除），App 裡會聽不到。',
+  age_restricted: '這支影片有年齡限制，嵌在 App 裡一律不會播放。',
+  region_blocked: '這支影片在台灣看不到。',
+  too_short: '這支太短了（多半是 Shorts），挑不出 8-15 句精聽。',
+  too_long: '這支太長了，AI 聽寫只會聽前六分鐘，後面的內容用不到。',
+}
+
+export interface VideoCheck {
+  /** full＝有 YouTube 金鑰的完整檢查；basic＝只確認能不能嵌入；none＝查不到 */
+  checked: 'full' | 'basic' | 'none'
+  /** null＝不知道（不擋人） */
+  playable: boolean | null
+  problem: PlayProblem | null
+  title: string
+  durationSec: number | null
+}
+
+/**
+ * 使用者自己貼連結時，先確認這支在 App 裡播不播得出來。
+ * 查不到就回 playable: null——不知道的時候不要擋人。
+ */
+export async function checkVideo(videoId: string): Promise<VideoCheck> {
+  const unknown: VideoCheck = { checked: 'none', playable: null, problem: null, title: '', durationSec: null }
+  const base = import.meta.env.VITE_WORKER_URL?.replace(/\/$/, '')
+  if (!base) return unknown
+  const passphrase = loadAccessPassphrase()
+  try {
+    const res = await fetch(`${base}/api/video-check`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(passphrase ? { 'x-lgl-access': passphrase } : {}),
+      },
+      body: JSON.stringify({ videoId, kind: 'video' }),
+    })
+    if (!res.ok) return unknown
+    const d = (await res.json()) as Partial<VideoCheck>
+    const problems: PlayProblem[] = ['embed_disabled', 'not_public', 'age_restricted', 'region_blocked', 'too_short', 'too_long']
+    return {
+      checked: d.checked === 'full' || d.checked === 'basic' ? d.checked : 'none',
+      playable: typeof d.playable === 'boolean' ? d.playable : null,
+      problem: problems.includes(d.problem as PlayProblem) ? (d.problem as PlayProblem) : null,
+      title: typeof d.title === 'string' ? d.title : '',
+      durationSec: typeof d.durationSec === 'number' ? d.durationSec : null,
+    }
+  } catch {
+    return unknown
+  }
 }
 
 /** 自動抓逐字稿失敗的原因，每一種的說明不一樣——全部變成「抓不到」等於沒講 */

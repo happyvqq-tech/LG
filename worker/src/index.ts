@@ -8,6 +8,14 @@ import { extractArticle } from './articleExtract'
 import { mergeFeeds, parseFeed, type FeedItem } from './rss'
 import { GEMINI_MODELS, transcribeWithGemini } from './geminiTranscribe'
 import {
+  pickPlayable,
+  playProblem,
+  toDetail,
+  VIEWER_REGION,
+  type VideoDetail,
+  type VideoKind,
+} from './youtubeFilter'
+import {
   extractCaptionTracks,
   json3ToPanelText,
   LANG_CODE,
@@ -92,6 +100,7 @@ const GOOGLE_VOICES_URL = 'https://texttospeech.googleapis.com/v1/voices'
 const LRCLIB_URL = 'https://lrclib.net/api'
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 const YOUTUBE_WATCH_URL = 'https://www.youtube.com/watch'
+const YOUTUBE_VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos'
 const RATE_LIMIT_PER_MINUTE = 20
 
 /**
@@ -124,7 +133,7 @@ const GOOGLE_VOICE_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9-]{1,40}$/
 const GTTS_MAX_CHARS = 500
 
 /** 每次改 Worker 就手動 +1，用來確認線上跑的是哪一版 */
-const WORKER_VERSION = 21
+const WORKER_VERSION = 22
 
 /** 前端夾帶通關密碼的 header 名稱 */
 const ACCESS_HEADER = 'x-lgl-access'
@@ -630,18 +639,24 @@ async function handleYouTube(request: Request, env: Env, origin: string): Promis
     )
   }
 
-  let body: { q?: string }
+  let body: { q?: string; kind?: string; language?: string }
   try {
-    body = (await request.json()) as { q?: string }
+    body = (await request.json()) as { q?: string; kind?: string; language?: string }
   } catch {
     return jsonResponse({ error: 'invalid_json' }, 400, origin)
   }
 
   const q = (body.q ?? '').trim().slice(0, 150)
   if (!q) return jsonResponse({ error: 'missing_query', message: '需要 q' }, 400, origin)
+  // 舊版前端不帶 kind，那時只有歌曲模組會呼叫這支
+  const kind: VideoKind = body.kind === 'video' ? 'video' : 'song'
+  const lang = LANG_CODE[body.language ?? ''] ?? ''
 
   const cache = caches.default
-  const cacheRequest = new Request(`https://yt-cache.local/${fnv1a(q)}-${q.length}`, { method: 'GET' })
+  const cacheKey = `${kind}|${lang}|${q}`
+  const cacheRequest = new Request(`https://yt-cache.local/v2/${fnv1a(cacheKey)}-${cacheKey.length}`, {
+    method: 'GET',
+  })
   const cached = await cache.match(cacheRequest)
   if (cached) {
     return new Response(cached.body, {
@@ -656,47 +671,77 @@ async function handleYouTube(request: Request, env: Env, origin: string): Promis
     return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
   }
 
-  let upstream: Response
+  const key = encodeURIComponent(env.YOUTUBE_API_KEY)
+
+  // 第一步：搜尋。能在搜尋階段就擋掉的先擋——可嵌入、可在站外播放、台灣看得到；
+  // 影片模組另外限定 4-20 分鐘（順便擋掉 Shorts）。多拿幾支，下一步才有得挑
+  const params = new URLSearchParams({
+    part: 'snippet',
+    type: 'video',
+    maxResults: '8',
+    videoEmbeddable: 'true',
+    videoSyndicated: 'true',
+    regionCode: VIEWER_REGION,
+    safeSearch: 'moderate',
+    q,
+  })
+  if (lang) params.set('relevanceLanguage', lang)
+  if (kind === 'video') params.set('videoDuration', 'medium')
+
+  let searchRaw: string
   try {
-    upstream = await fetch(
-      `${YOUTUBE_SEARCH_URL}?part=snippet&type=video&maxResults=1&videoEmbeddable=true` +
-        `&q=${encodeURIComponent(q)}&key=${encodeURIComponent(env.YOUTUBE_API_KEY)}`,
-    )
+    const res = await fetch(`${YOUTUBE_SEARCH_URL}?${params}&key=${key}`)
+    searchRaw = await res.text()
+    if (!res.ok) return youtubeFailed(res.status, searchRaw, origin)
   } catch {
     return jsonResponse({ error: 'youtube_unreachable', message: '無法連線到 YouTube' }, 502, origin)
   }
 
-  const raw = await upstream.text()
-  if (!upstream.ok) {
+  let ids: string[] = []
+  try {
+    const parsed = JSON.parse(searchRaw) as { items?: Array<{ id?: { videoId?: string } }> }
+    ids = (parsed.items ?? []).map((it) => it.id?.videoId ?? '').filter(Boolean)
+  } catch {
+    // 解析不出來就當成找不到
+  }
+  if (ids.length === 0) {
+    return jsonResponse({ error: 'video_not_found', message: '找不到影片' }, 404, origin)
+  }
+
+  // 第二步：逐支確認。搜尋參數擋不住年齡限制與「公開但不能嵌入」的漏網之魚，
+  // 而 videos.list 只要 1 單位配額，幾乎不花成本
+  let details: VideoDetail[] = []
+  try {
+    const res = await fetch(
+      `${YOUTUBE_VIDEOS_URL}?part=snippet,status,contentDetails&id=${ids.join(',')}&key=${key}`,
+    )
+    const raw = await res.text()
+    if (!res.ok) return youtubeFailed(res.status, raw, origin)
+    const parsed = JSON.parse(raw) as { items?: unknown[] }
+    // videos.list 不保證照 id 的順序回來，照搜尋的相關度排序重排
+    const byId = new Map(
+      (parsed.items ?? []).map((it) => toDetail(it)).filter((d): d is VideoDetail => d !== null).map((d) => [d.id, d]),
+    )
+    details = ids.map((id) => byId.get(id)).filter((d): d is VideoDetail => d !== undefined)
+  } catch {
+    return jsonResponse({ error: 'youtube_unreachable', message: '無法連線到 YouTube' }, 502, origin)
+  }
+
+  const best = pickPlayable(details, kind)
+  if (!best) {
     return jsonResponse(
-      {
-        error: 'youtube_failed',
-        status: upstream.status,
-        message:
-          upstream.status === 403
-            ? 'YouTube 拒絕這把金鑰，請確認已啟用 YouTube Data API v3 且配額未用完'
-            : `YouTube 回傳 ${upstream.status}`,
-        upstream: raw.slice(0, 300),
-      },
-      502,
+      { error: 'video_not_found', reason: 'none_playable', message: '搜到的影片都不能在 App 裡播放' },
+      404,
       origin,
     )
   }
 
-  let videoId = ''
-  let videoTitle = ''
-  try {
-    const parsed = JSON.parse(raw) as { items?: Array<{ id?: { videoId?: string }; snippet?: { title?: string } }> }
-    videoId = parsed.items?.[0]?.id?.videoId ?? ''
-    videoTitle = parsed.items?.[0]?.snippet?.title ?? ''
-  } catch {
-    // 解析不出來就當成找不到，下面會回 404
-  }
-  if (!videoId) {
-    return jsonResponse({ error: 'video_not_found', message: '找不到影片' }, 404, origin)
-  }
-
-  const payload = JSON.stringify({ videoId, videoTitle })
+  const payload = JSON.stringify({
+    videoId: best.id,
+    videoTitle: best.title,
+    durationSec: best.durationSec,
+    hasCaptions: best.hasCaptions,
+  })
   await cache.put(
     cacheRequest,
     new Response(payload, {
@@ -708,6 +753,96 @@ async function handleYouTube(request: Request, env: Env, origin: string): Promis
     status: 200,
     headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(origin) },
   })
+}
+
+function youtubeFailed(status: number, raw: string, origin: string): Response {
+  return jsonResponse(
+    {
+      error: 'youtube_failed',
+      status,
+      message:
+        status === 403
+          ? 'YouTube 拒絕這把金鑰，請確認已啟用 YouTube Data API v3 且配額未用完'
+          : `YouTube 回傳 ${status}`,
+      upstream: raw.slice(0, 300),
+    },
+    502,
+    origin,
+  )
+}
+
+/**
+ * 檢查單一支影片在 App 裡播不播得出來（使用者自己貼連結時用）。
+ *
+ * 有 YOUTUBE_API_KEY 就用 videos.list 做完整檢查（嵌入、地區、年齡、長度）；
+ * 沒有的話退回 YouTube 的 oEmbed——免金鑰，而且它對「作者關掉嵌入」的影片
+ * 會回 401，剛好就是最常見的那一種播不出來。其他情況回「不知道」，不擋人。
+ */
+async function handleVideoCheck(request: Request, env: Env, origin: string): Promise<Response> {
+  if (!hasAccess(request, env)) return accessDeniedResponse(origin)
+
+  let body: { videoId?: string; kind?: string }
+  try {
+    body = (await request.json()) as { videoId?: string; kind?: string }
+  } catch {
+    return jsonResponse({ error: 'invalid_json' }, 400, origin)
+  }
+  const videoId = (body.videoId ?? '').trim()
+  if (!/^[\w-]{11}$/.test(videoId)) {
+    return jsonResponse({ error: 'missing_query', message: '需要 11 碼的 videoId' }, 400, origin)
+  }
+  const kind: VideoKind = body.kind === 'song' ? 'song' : 'video'
+
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  if (isRateLimited(ip, 'video-check', 30)) {
+    return jsonResponse({ error: 'rate_limited', message: '查詢太頻繁，請一分鐘後再試' }, 429, origin)
+  }
+
+  const reply = (payload: Record<string, unknown>) => jsonResponse(payload, 200, origin)
+
+  if (env.YOUTUBE_API_KEY) {
+    try {
+      const res = await fetch(
+        `${YOUTUBE_VIDEOS_URL}?part=snippet,status,contentDetails&id=${videoId}` +
+          `&key=${encodeURIComponent(env.YOUTUBE_API_KEY)}`,
+      )
+      if (res.ok) {
+        const parsed = (await res.json()) as { items?: unknown[] }
+        const d = parsed.items?.[0] ? toDetail(parsed.items[0]) : null
+        if (!d) return reply({ checked: 'full', playable: false, problem: 'not_public' })
+        const problem = playProblem(d, kind)
+        return reply({
+          checked: 'full',
+          playable: problem === null,
+          problem,
+          title: d.title,
+          durationSec: d.durationSec,
+          hasCaptions: d.hasCaptions,
+        })
+      }
+    } catch {
+      // 退回下面的 oEmbed
+    }
+  }
+
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
+    )
+    if (res.ok) {
+      const data = (await res.json()) as { title?: string }
+      return reply({ checked: 'basic', playable: true, problem: null, title: data.title ?? '' })
+    }
+    if (res.status === 401 || res.status === 403) {
+      return reply({ checked: 'basic', playable: false, problem: 'embed_disabled' })
+    }
+    if (res.status === 404 || res.status === 400) {
+      return reply({ checked: 'basic', playable: false, problem: 'not_public' })
+    }
+  } catch {
+    // 連不上就當作不知道
+  }
+  return reply({ checked: 'none', playable: null, problem: null })
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1177,6 +1312,10 @@ export default {
 
     if (url.pathname === '/api/youtube' && request.method === 'POST') {
       return handleYouTube(request, env, origin)
+    }
+
+    if (url.pathname === '/api/video-check' && request.method === 'POST') {
+      return handleVideoCheck(request, env, origin)
     }
 
     if (url.pathname === '/api/transcript' && request.method === 'POST') {

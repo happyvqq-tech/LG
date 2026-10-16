@@ -69,16 +69,37 @@ export function fetchLyrics(track: string, artist: string): Promise<FetchedLyric
  * 呼叫端改成請使用者貼一次連結。
  */
 export function findVideo(track: string, artist: string): Promise<string | null> {
-  return findVideoByQuery(`${artist} ${track} official audio`).then((r) => r?.videoId ?? null)
+  return findVideoByQuery(`${artist} ${track} official audio`, { kind: 'song' }).then((r) => r?.videoId ?? null)
+}
+
+export interface FoundVideo {
+  videoId: string
+  videoTitle: string
+  /** Worker 已確認可嵌入、台灣看得到、沒有年齡限制，長度也適合（見 worker/src/youtubeFilter.ts） */
+  durationSec: number | null
+  hasCaptions: boolean
 }
 
 /**
  * 通用的 YouTube 搜尋（影片模組也用這支）。
  * 沒設 YOUTUBE_API_KEY 的部署會回 null，呼叫端改成讓使用者自己挑。
  */
-export function findVideoByQuery(q: string): Promise<{ videoId: string; videoTitle: string } | null> {
-  return postWorker<{ videoId?: string; videoTitle?: string }>('/api/youtube', { q }).then((r) =>
-    r?.videoId ? { videoId: r.videoId, videoTitle: r.videoTitle ?? '' } : null,
+export function findVideoByQuery(
+  q: string,
+  opts: { kind: 'song' | 'video'; language?: string },
+): Promise<FoundVideo | null> {
+  return postWorker<{ videoId?: string; videoTitle?: string; durationSec?: number | null; hasCaptions?: boolean }>(
+    '/api/youtube',
+    { q, kind: opts.kind, language: opts.language },
+  ).then((r) =>
+    r?.videoId
+      ? {
+          videoId: r.videoId,
+          videoTitle: r.videoTitle ?? '',
+          durationSec: typeof r.durationSec === 'number' ? r.durationSec : null,
+          hasCaptions: r.hasCaptions === true,
+        }
+      : null,
   )
 }
 
