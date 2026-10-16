@@ -34,7 +34,7 @@
 | 古文語音・所有 STT | 瀏覽器內建：speechSynthesis（TTS）、SpeechRecognition（STT） |
 | 台語語音 | 雅婷 TTS（`tts.api.yating.tw`），經 Worker `/api/tts` 代理，key 存 Worker secret |
 | 歌詞 | LRCLIB（`lrclib.net`，免費免金鑰，回傳逐句時間戳的 LRC），經 Worker `/api/lyrics` 代理並快取；查不到時退回請使用者自己貼 |
-| 原曲／影片 | YouTube 官方嵌入（不代管任何影音檔）。影片以 YouTube Data API v3 搜尋，經 Worker `/api/youtube`；沒設金鑰時改請使用者貼一次連結 |
+| 原曲／影片 | YouTube 官方嵌入（不代管任何影音檔）。影片以 YouTube Data API v3 搜尋，經 Worker `/api/youtube`；搜到後再用 `videos.list` 逐支確認**在 App 裡播得出來**（可嵌入、台灣看得到、無年齡限制、長度適合，規則在 `worker/src/youtubeFilter.ts`）。使用者自己貼的連結由 `/api/video-check` 檢查（沒金鑰時退回免金鑰的 oEmbed，至少擋得掉「作者關閉嵌入」）。沒設金鑰時改請使用者貼一次連結 |
 | 文章推薦 | 各語言幾家新聞的 RSS，經 Worker `/api/feeds` 合併並快取 30 分鐘（清單在 `worker/src/index.ts` 的 `FEEDS`，某家失效改那裡再 deploy 就好）。AI 只從這份真實清單裡**用索引挑**，不憑記憶推薦 |
 | 文章 | 使用者貼網址或全文。網址經 Worker `/api/article` 抓一次並抽出本文（純函式在 `worker/src/articleExtract.ts`），抓不到就請使用者貼；AI 只分析不重打原文 |
 | 影片逐字稿 | Worker `/api/transcript` 先免費試抓影片自己的字幕（常被擋）→ 抓不到時改由 **Google Gemini API 直接聽影片**轉寫（選配，需 `GEMINI_API_KEY`，見 `worker/src/geminiTranscribe.ts`）→ 書籤小工具 → 使用者手動貼上 |
@@ -48,7 +48,8 @@
    ├── fetch ──→ Cloudflare Worker /api/gtts ──→ texttospeech.googleapis.com（英日韓語音，含快取）
    ├── fetch ──→ Cloudflare Worker /api/tts  ──→ tts.api.yating.tw（台語語音，含快取）
    ├── fetch ──→ Cloudflare Worker /api/lyrics ──→ lrclib.net（歌詞＋逐句時間戳，含快取）
-   ├── fetch ──→ Cloudflare Worker /api/youtube ──→ YouTube Data API（找原曲與學習影片，含快取）
+   ├── fetch ──→ Cloudflare Worker /api/youtube ──→ YouTube Data API（找原曲與學習影片，並確認播得出來，含快取）
+   ├── fetch ──→ Cloudflare Worker /api/video-check ──→ YouTube Data API 或 oEmbed（貼上的連結播不播得出來）
    ├── fetch ──→ Cloudflare Worker /api/transcript ──→ youtube.com 試抓字幕；失敗時 → Gemini API 聽影片（含快取）
    ├── fetch ──→ Cloudflare Worker /api/article ──→ 任意公開網頁（抽出本文，含快取與內網防護）
    └── fetch ──→ Cloudflare Worker /api/feeds ──→ 各家新聞 RSS（今天的標題清單，含快取）
@@ -67,6 +68,7 @@
 │   ├── src/articleExtract.ts   # 網頁 HTML 抽出本文（純函式，同上）
 │   ├── src/rss.ts              # RSS／Atom 解析與多來源輪流合併（純函式）
 │   ├── src/geminiTranscribe.ts # 影片逐字稿第二層：Gemini 聽影片轉寫（模型逐一嘗試、輸出整理）
+│   ├── src/youtubeFilter.ts    # 影片在 App 裡播不播得出來的判斷（嵌入、地區、年齡、長度；純函式）
 │   ├── src/prompts/        # 全部 15 個 system prompt 與模型選擇（見第 6 節）
 │   └── wrangler.toml
 ├── src/

@@ -14,15 +14,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useProfile } from '../lib/profileContext'
 import {
+  checkVideo,
   createVideo,
   deleteVideo,
   fetchTranscript,
   listVideos,
   resolvePicks,
   suggestSearches,
+  youtubeSearchUrl,
   AI_TRANSCRIBE_NOTE,
+  PLAY_PROBLEM_NOTE,
   TRANSCRIPT_MISS_NOTE,
   type FetchedTranscript,
+  type VideoCheck,
   type TranscriptMissResult,
 } from '../lib/videoService'
 import { parseYouTubeId } from '../lib/songService'
@@ -85,7 +89,7 @@ function TranscriptTool() {
 
 /** 一個搜尋方向。搜到真實影片就直接開工，搜不到就給 YouTube 搜尋連結讓使用者自己挑 */
 export function PickCard({ pick, onPick }: { pick: ResolvedPick; onPick: () => void }) {
-  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(pick.query)}`
+  const searchUrl = youtubeSearchUrl(pick.query)
 
   return (
     <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
@@ -99,6 +103,10 @@ export function PickCard({ pick, onPick }: { pick: ResolvedPick; onPick: () => v
         <>
           <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
             搜到了：{pick.videoTitle || '（無標題）'}
+            {/* 搜到的都已經在 Worker 確認過：能嵌入、台灣看得到、沒有年齡限制、長度適合 */}
+            <span className="mt-1 block text-xs text-teal-700">
+              ✅ 已確認可以在 App 裡播放{pick.durationSec ? `・${Math.round(pick.durationSec / 60)} 分鐘` : ''}
+            </span>
           </p>
           <button onClick={onPick} className="mt-2 w-full rounded-xl bg-teal-50 py-3 font-bold text-teal-700">
             學這支
@@ -162,6 +170,24 @@ export default function VideoHome() {
   const [fetched, setFetched] = useState<FetchedTranscript | TranscriptMissResult | null>(null)
   const [fetching, setFetching] = useState(false)
   const [showTool, setShowTool] = useState(false)
+  /** 這支影片在 App 裡播不播得出來（使用者貼連結時才知道；推薦來的已在搜尋時篩過） */
+  const [check, setCheck] = useState<VideoCheck | null>(null)
+  const draftVideoId = draft ? draft.videoId || parseYouTubeId(linkInput) : null
+
+  useEffect(() => {
+    setCheck(null)
+    if (!draftVideoId) return
+    let alive = true
+    void checkVideo(draftVideoId).then((c) => {
+      if (!alive) return
+      setCheck(c)
+      // 順手補上標題：使用者自己貼連結時常常懶得打名字
+      if (c.title) setDraft((d) => (d && !d.title.trim() ? { ...d, title: c.title } : d))
+    })
+    return () => {
+      alive = false
+    }
+  }, [draftVideoId])
 
   useEffect(() => {
     if (!profile) return
@@ -215,8 +241,8 @@ export default function VideoHome() {
         profile.interests ?? null,
       )
       // 搜尋方向先出來，真實影片再補上去——搜不到不是錯誤
-      setPicks(list.map((p) => ({ ...p, videoId: null, videoTitle: null })))
-      const resolved = await resolvePicks(list).catch(() => null)
+      setPicks(list.map((p) => ({ ...p, videoId: null, videoTitle: null, durationSec: null })))
+      const resolved = await resolvePicks(list, language).catch(() => null)
       if (resolved) setPicks(resolved)
     } catch (e: unknown) {
       setErrorMsg(e instanceof ClaudeError ? e : `找方向失敗：${String((e as Error).message)}`)
@@ -253,6 +279,10 @@ export default function VideoHome() {
     const id = draft.videoId || parseYouTubeId(linkInput)
     if (!id) {
       setErrorMsg('請貼上影片連結——播放要用它，少了就只剩文字稿')
+      return
+    }
+    if (check?.playable === false) {
+      setErrorMsg('這支影片在 App 裡播不出來，做成教材也聽不到。換一支吧')
       return
     }
     if (!draft.title.trim()) {
@@ -344,6 +374,27 @@ export default function VideoHome() {
               className="mt-1 w-full rounded-xl border border-slate-300 p-3 text-sm"
             />
           </div>
+        )}
+
+        {/* 先確認播不播得出來：在 YouTube 上正常的影片，嵌進 App 時常常不能播
+            （作者關掉嵌入、地區限制、年齡限制）。在做教材之前就講，不要等做完才發現聽不到 */}
+        {check?.playable === false && check.problem && (
+          <div className="mt-3 rounded-2xl bg-rose-50 p-4 text-sm leading-relaxed text-rose-900 ring-1 ring-rose-200/70">
+            {PLAY_PROBLEM_NOTE[check.problem]}
+            <span className="mt-1 block text-xs text-rose-800/80">換一支吧，這支做成教材也聽不到。</span>
+          </div>
+        )}
+        {check?.playable === true && (
+          <p className="mt-2 text-xs text-teal-700">
+            ✅ 確認過可以在 App 裡播放
+            {check.durationSec ? `・${Math.round(check.durationSec / 60)} 分鐘` : ''}
+          </p>
+        )}
+        {/* Shorts 通常能嵌入，但太短挑不出段落。沒有金鑰時查不到長度，只能看網址 */}
+        {linkInput.includes('/shorts/') && check?.problem !== 'too_short' && (
+          <p className="mt-2 text-xs text-amber-700">
+            這是 Shorts，通常太短，挑不出 8-15 句精聽。建議換一支 3-20 分鐘的影片。
+          </p>
         )}
 
         {/* 自動抓一次。成功就省掉手動複製，失敗就退回下面的貼上流程 */}
