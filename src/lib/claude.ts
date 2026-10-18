@@ -173,11 +173,16 @@ async function requestClaude(args: CallClaudeArgs): Promise<ClaudeReply> {
     // 兩種錯誤格式：Anthropic 的 {error:{message}}、Worker 自己的 {error:'code', message}
     let detail = ''
     let errorCode = ''
+    /** Worker 轉發 403 時，Anthropic 的原話放在這個欄位（Worker 自己的 message 是另一段中文） */
+    let upstream = ''
     try {
       const j = (await res.json()) as {
         error?: string | { message?: string }
         message?: string
+        upstream?: unknown
       }
+      if (typeof j.upstream === 'string') upstream = j.upstream
+      else if (j.upstream) upstream = JSON.stringify(j.upstream)
       if (typeof j.error === 'object' && j.error?.message) detail = j.error.message
       else if (j.message) detail = j.message
       else if (typeof j.error === 'string') detail = j.error
@@ -209,9 +214,20 @@ async function requestClaude(args: CallClaudeArgs): Promise<ClaudeReply> {
       )
     }
     if (res.status === 403) {
+      // 「Request not allowed」是另一回事：Anthropic 擋掉了這次請求的**發出地區**
+      // （Worker 被分到香港的機房時會這樣），跟帳號、額度、金鑰都無關，而且時好時壞——
+      // 說「重試不會好」就是在誤導。固定新加坡執行（worker/wrangler.toml 的 placement）
+      // 之後應該不會再發生，但萬一又碰到，重試是對的建議
+      if (/request not allowed/i.test(`${detail} ${upstream}`)) {
+        throw new ClaudeError(
+          'api',
+          `AI 服務錯誤（403）：${detail}${upstream ? ` ／ Anthropic 回應：${upstream.slice(0, 200)}` : ''}`,
+          'AI 服務這次沒接上，多半是連線路徑的問題，不是你的帳號。再按一次「重試」通常就會好；如果連續失敗，請回報。',
+        )
+      }
       throw new ClaudeError(
         'api',
-        `AI 服務錯誤（403）${detail ? '：' + detail : ''}`,
+        `AI 服務錯誤（403）${detail ? '：' + detail : ''}${upstream ? ` ／ Anthropic 回應：${upstream.slice(0, 200)}` : ''}`,
         'AI 帳號的權限被擋住了，重試不會好——這不是某個功能壞掉。請到 console.anthropic.com 檢查帳號狀態（額度、金鑰是否停用、有沒有要求身分驗證）。',
       )
     }
